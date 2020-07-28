@@ -2,10 +2,10 @@ import os, sys
 import numpy as np
 import tensorflow as tf
 
-# pathData="/home/users/ilic/ML"
-pathData="/mnt/local-scratch/u/ilic"
-path_train = pathData + "/data/train"
-path_valid = pathData + "/data/validation"
+# pathData="/mnt/local-scratch/u/ilic"
+pathData="/home/users/ilic/ML/SDSS_image_data"
+path_train = pathData + "/train"
+path_valid = pathData + "/valid"
 
 print("#####################################################")
 

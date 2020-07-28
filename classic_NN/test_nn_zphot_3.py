@@ -5,10 +5,10 @@ from astropy.io import fits
 
 import os, sys
 
-from keras.models import Sequential
-from keras.layers.core import Dense, Dropout, Activation, Flatten
-from keras.optimizers import Adam, SGD
-from keras.initializers import Constant
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten
+from tensorflow.keras.optimizers import Adam, SGD
+from tensorflow.keras.initializers import Constant
 
 import matplotlib.pyplot as plt
 
@@ -19,7 +19,7 @@ ls /content/drive/My\ Drive/redmapper*
 '''
 # Path to fits files
 #pathData="/content/drive/My Drive/"
-pathData="/home/silic/Downloads/"
+pathData="/home/users/ilic/ML/SDSS_fits_data/"
 
 # Read data in fits files
 hdul2 = fits.open(pathData+'redmapper_dr8_public_v6.3_members.fits')
@@ -48,7 +48,7 @@ for ix, lab in enumerate(labs_from_mem):
     Y[:, ix] = mem_full_data[lab]
 
 # Split training and testing datasets
-frac = 4./5. # fraction of data dedicated to training 
+frac = 4./5. # fraction of data dedicated to training
 max_ix = int(n_samp * frac)
 print("%s samples for training out of %s" % (max_ix, X.shape[0]))
 shuffle = True
@@ -58,7 +58,7 @@ if shuffle:
     np.random.shuffle(index)
     X = X[index, :]
     Y = Y[index, :]
-X_train = X[:max_ix,:]   
+X_train = X[:max_ix,:]
 X_test = X[max_ix:,:]
 Y_train = Y[:max_ix, :]
 Y_test = Y[max_ix:, :]
@@ -104,4 +104,6 @@ Y_train_from_ann = ann.predict(X_train)
 plt.subplot(1,2,2)
 plt.plot(Y_train[:, 0], Y_train_from_ann[:, 0], '+')
 plt.plot([Y_train[:, 0].min(), Y_train[:, 0].max()], [Y_train[:, 0].min(), Y_train[:, 0].max()])
+
+plt.savefig('z_phot_spec.pdf')
 plt.show()
