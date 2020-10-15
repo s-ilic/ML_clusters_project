@@ -20,7 +20,9 @@ NUM_TRAINING_EXAMPLES = 100000
 NUM_TEST_EXAMPLES = 10000
 NUM_VALIDATION_EXAMPLES = 10000
 NUM_EPOCHS_JANOSSY = 1000
+NUM_EPOCHS_RNN = 1000
 BASE_EMBEDDING_DIMENSION = 100
+INFERENCE_PERMUTATIONS = 20
 
 
 def construct_task_specific_output(task, input_sequence):
@@ -78,8 +80,8 @@ vocab_size = 100
 sequence_length = 5
 janossy_k = 5
 # task = 'sum'
-task = 'mean'
-# task = 'variance'
+# task = 'mean'
+task = 'variance'
 num_epochs = NUM_EPOCHS_JANOSSY
 num_neurons_in_f = 30
 num_layers_in_rho = 1
@@ -124,7 +126,7 @@ with mirrored_strategy.scope():
 
 model.summary()
 
-nb_epoch=4000
+nb_epoch=10000
 
 history = model.fit(
     X_train,
