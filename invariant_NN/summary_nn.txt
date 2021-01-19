@@ -1,0 +1,65 @@
+inn_mass_calc_nn_v3 :
+=====================
+n_mem_max = 30
+n_rand_rot = 128
+n_rand_perm = 128
+num_neurons_in_f = 80
+num_layers_in_rho = 1
+num_neurons_in_rho = 80
+f activ = relu
+rho activ = relu
+loss = mean_squared_error
+
+inn_mass_calc_nn_v4 :
+=====================
+n_mem_max = 10
+n_rand_rot = 128*4
+n_rand_perm = 128
+num_neurons_in_f = 80
+num_layers_in_rho = 1
+num_neurons_in_rho = 80
+f activ = tanh
+rho activ = tanh
+loss = mean_squared_error
+
+inn_mass_calc_nn_v5 :
+=====================
+n_mem_max = 10
+n_rand_rot = 128*4
+n_rand_perm = 128
+num_neurons_in_f = 80
++ dropout(0.2)
+num_layers_in_rho = 1
+num_neurons_in_rho = 80
++ dropout(0.2)
+f activ = tanh
+rho activ = tanh
+loss = mean_squared_error
+
+inn_mass_calc_nn_v6 :
+=====================
+n_mem_max = 10
+n_rand_rot = 128*4
+n_rand_perm = 128
+num_neurons_in_f = 80
++ L2(0.001)
+num_layers_in_rho = 1
+num_neurons_in_rho = 80
++ L2(0.001)
+f activ = tanh
+rho activ = tanh
+loss = mean_squared_error
+
+inn_mass_calc_nn_v7 :
+=====================
+n_mem_max = 100 (then 50 halfway ?)
+n_rand_rot = 128
+n_rand_perm = 128
+num_neurons_in_f = 80
++ L2(0.001)
+num_layers_in_rho = 1
+num_neurons_in_rho = 80
++ L2(0.001)
+f activ = tanh
+rho activ = tanh
+loss = mean_squared_error

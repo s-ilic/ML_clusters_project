@@ -34,6 +34,9 @@ decs = clu_full_data['DEC'] / 180. * np.pi
 clu_full_data['X'] = np.cos(decs) * np.cos(ras)
 clu_full_data['Y'] = np.cos(decs) * np.sin(ras)
 clu_full_data['Z'] = np.sin(decs)
+clu_full_data['M500'] = np.zeros(len(hdul1[1].data))
+clu_full_data['M500_ERR_LOW'] = np.zeros(len(hdul1[1].data))
+clu_full_data['M500_ERR_UPP'] = np.zeros(len(hdul1[1].data))
 # mem_full_data = hdul2[1].data
 mem_full_data = {}
 for n in hdul2[1].data.dtype.names:
@@ -49,16 +52,31 @@ print("Variables in member catalog:")
 print(mem_full_data.keys())
 # sys.exit()
 
+hdul3 = fits.open("/home/users/ilic/ML/other_cats/comprass.fits")
+ix_red_comp = []
+for i in range(len(hdul3[1].data)):
+    if hdul3[1].data['REDMAPPER'][i] != '':
+        tmp = np.where(hdul3[1].data['REDMAPPER'][i] == hdul1[1].data['NAME'])[0]
+        if len(tmp) != 0:
+            clu_full_data['M500'][tmp[0]] = hdul3[1].data['M500'][i]
+            clu_full_data['M500_ERR_LOW'][tmp[0]] = hdul3[1].data['M500_ERR_LOW'][i]
+            clu_full_data['M500_ERR_UPP'][tmp[0]] = hdul3[1].data['M500_ERR_UPP'][i]
+            ix_red_comp.append(tmp[0])
+
+
 # IDs of clusters and corresponding number of members
 clu_ids, clu_num = np.unique(mem_full_data['ID'], return_counts=True)
 n_clus_tot = len(clu_ids)
-n_mem_max = 100
+n_mem_max = 200
 # batch_size = 1024
 # n_batch = 5
 batch_size = 1
 n_batch = n_clus_tot
 # n_mem_max = clu_num.max()
-ix_keep_clu = [i for i in range(n_clus_tot) if clu_num[i] <= n_mem_max]
+ix_keep_clu = []
+for i in range(n_clus_tot):
+    if (clu_num[i] <= n_mem_max) & (i in ix_red_comp):
+        ix_keep_clu.append(i)
 # clu_counts, clu_counts_num = np.unique(clu_num, return_counts=True)
 # n_mem_max = clu_counts[clu_counts_num.argmax()]
 # ix_keep_clu = [i for i in range(n_clus_tot) if clu_num[i] == n_mem_max]
@@ -74,7 +92,7 @@ feat = ['R', 'P', 'P_FREE', 'THETA_I', 'THETA_R', 'IMAG', 'IMAG_ERR', 'MODEL_MAG
 n_feat = len(feat)
 
 # Which labels to predicts
-labs = ['LAMBDA']
+labs = ['M500']
 n_labs = len(labs)
 
 # Build feature array
@@ -116,14 +134,11 @@ n_valid = len(X_valid)
 
 
 # Define NN model
-n_rand_perm = 100 # b/b3
-# n_rand_perm = 1000 # b2
-# num_neurons_in_f = 100 # b/b2
-# num_neurons_in_f = 30 # b3
-num_neurons_in_f = 60 # b4
+n_rand_perm = 100
+### v_1
+num_neurons_in_f = 10
 num_layers_in_rho = 1
-num_neurons_in_rho = 100
-# num_neurons_in_rho = 200 # b4
+num_neurons_in_rho = 10
 
 def generator(inputs, labels, n, batch_size, ixs):
     i = 0
@@ -149,7 +164,8 @@ lay1 = Dense(
     # activation="tanh",   # b
     # activation="linear",
 )
-out_lay1 = lay1(inputs)
+# out_lay1 = lay1(inputs) # v1
+out_lay1 = Dropout(0.1)(lay1(inputs)) # v2
 output = tf.math.reduce_mean(
     out_lay1,
     axis=1,
@@ -182,27 +198,17 @@ model.compile(
 )
 model.summary()
 
-# model.load_weights('saved_models/inv_nn_v6b/inv_nn_v6b')
-# model.load_weights('saved_models/inv_nn_v6b2')
-# model.load_weights('saved_models/inv_nn_v6b3/inv_nn_v6b3')
-model.load_weights('saved_models/inv_nn_v6b5/inv_nn_v6b5')
+# model.load_weights('saved_models/inv_nn_v6b5/inv_nn_v6b5')
 sys.exit()
 
-# log_filename = "saved_models/inv_nn_v6b/inv_nn_v6b.log"
-# log_filename = "saved_models/inv_nn_v6b2/inv_nn_v6b2.log"
-# log_filename = "saved_models/inv_nn_v6b3/inv_nn_v6b3.log"
-# log_filename = "saved_models/inv_nn_v6b4/inv_nn_v6b4.log"
-log_filename = "saved_models/inv_nn_v6b5/inv_nn_v6b5.log"
+log_filename = "saved_models/inn_mass_calc_v2/inn_mass_calc_v2.log"
 log_cb = tf.keras.callbacks.CSVLogger(
     log_filename,
     separator=' ',
     append=True,
 )
 
-# chk_filename = "saved_models/inv_nn_v6b/inv_nn_v6b"
-# chk_filename = "saved_models/inv_nn_v6b2/inv_nn_v6b2"
-# chk_filename = "saved_models/inv_nn_v6b3/inv_nn_v6b3"
-chk_filename = "saved_models/inv_nn_v6b5/inv_nn_v6b5"
+chk_filename = "saved_models/inn_mass_calc_v2/inn_mass_calc_v2"
 chk_cb = tf.keras.callbacks.ModelCheckpoint(
     filepath=chk_filename,
     monitor='val_loss',
@@ -340,46 +346,32 @@ for i in tqdm(range(n_train)):
 
 ########################
 
-mi = 0.04256724938750267
-ma = 0.6338202357292175
-plt.figure(figsize=(10,5))
-plt.subplot(1,2,1)
-plt.hist2d(Y_valid[:, 0], eval_out[:, 0], bins=32, norm=matplotlib.colors.LogNorm(), range=[[mi, ma], [mi, ma]])
-plt.xlabel('z_lambda_redmapper')
-plt.ylabel('z_NN')
-plt.title('validation set')
-plt.colorbar()
-plt.plot([mi, ma], [mi, ma], color='red')
-plt.subplot(1,2,2)
-plt.hist2d(Y_train[:, 0], eval_out_train[:, 0], bins=32, norm=matplotlib.colors.LogNorm(), range=[[mi, ma], [mi, ma]])
-plt.xlabel('z_lambda_redmapper')
-plt.ylabel('z_NN')
-plt.colorbar()
-plt.title('training set')
-plt.plot([mi, ma], [mi, ma], color='red')
-plt.savefig('tmp0.pdf')
-
-
-#############################
-
-mini = min(Y_valid.min(), eval_out.min())
-maxi = max(Y_valid.max(), eval_out.max())
-plt.figure(figsize=(10, 5))
-plt.subplot(1,2,1)
-plt.hist2d(
-    Y_valid[:, 0],
-    eval_out[:, 0],
-    bins=128,
-    norm=matplotlib.colors.LogNorm(),
-    range=[[mini, maxi]]*2,
-)
-plt.plot([mini, maxi], [mini, maxi], color='red', lw=0.5)
-plt.axis('equal')
-plt.colorbar()
-plt.xlabel("redmapper lambda")
-plt.ylabel("NN lambda")
-plt.subplot(1,2,2)
-plt.hist((Y_valid[:, 0] - eval_out[:, 0])/clu_full_data['LAMBDA_ERR'][ix_valid], bins=64)
-plt.xlabel("(redmapper lambda - NN lambda)/(sigma_lambda redmapper)")
-plt.savefig('tmp0.pdf')
-
+t0 = np.genfromtxt('saved_models/inn_mass_calc/inn_mass_calc.log',names=True)
+t00 = np.genfromtxt('saved_models/inn_mass_calc_v2/inn_mass_calc_v2.log',names=True)
+t1 = np.genfromtxt('saved_models/inn_mass_calc_gru/inn_mass_calc_gru.log',names=True)
+t2 = np.genfromtxt('saved_models/inn_mass_calc_gru_v2/inn_mass_calc_gru_v2.log',names=True)
+plt.subplot(2, 2, 1)
+plt.title("Dense(10) + Dense(10)")
+plt.plot(t0['loss'], alpha=0.5, label='Training loss')
+plt.plot(t0['val_loss'], alpha=0.5, label='Validation loss')
+plt.legend()
+plt.ylim(0, 4)
+plt.subplot(2, 2, 2)
+plt.title("Dense(10) + Dropout(0.1) + Dense(10)")
+plt.plot(t00['loss'], alpha=0.5, label='Training loss')
+plt.plot(t00['val_loss'], alpha=0.5, label='Validation loss')
+plt.legend()
+plt.ylim(0, 4)
+plt.subplot(2, 2, 3)
+plt.title("GRU(10) + Dense(10)")
+plt.plot(t1['loss'], alpha=0.5, label='Training loss')
+plt.plot(t1['val_loss'], alpha=0.5, label='Validation loss')
+plt.legend()
+plt.ylim(0, 4)
+plt.subplot(2, 2, 4)
+plt.title("GRU(20) + Dense(20)")
+plt.plot(t2['loss'], alpha=0.5, label='Training loss')
+plt.plot(t2['val_loss'], alpha=0.5, label='Validation loss')
+plt.legend()
+plt.ylim(0, 4)
+plt.show()

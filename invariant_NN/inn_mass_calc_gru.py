@@ -7,6 +7,7 @@ from tqdm import tqdm
 from astropy.io import fits
 from multiprocessing import Pool
 from itertools import combinations, permutations
+import healpy as hp
 
 import tensorflow as tf
 from tensorflow import keras
@@ -14,10 +15,9 @@ import tensorflow.keras.backend as K
 from tensorflow.keras import layers, Model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten
+from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten, LSTM, GRU
 
 
-# mirrored_strategy = tf.distribute.MirroredStrategy()
 
 # Path to fits files
 pathData="/home/users/ilic/ML/SDSS_fits_data/"
@@ -34,6 +34,9 @@ decs = clu_full_data['DEC'] / 180. * np.pi
 clu_full_data['X'] = np.cos(decs) * np.cos(ras)
 clu_full_data['Y'] = np.cos(decs) * np.sin(ras)
 clu_full_data['Z'] = np.sin(decs)
+clu_full_data['M500'] = np.zeros(len(hdul1[1].data))
+clu_full_data['M500_ERR_LOW'] = np.zeros(len(hdul1[1].data))
+clu_full_data['M500_ERR_UPP'] = np.zeros(len(hdul1[1].data))
 # mem_full_data = hdul2[1].data
 mem_full_data = {}
 for n in hdul2[1].data.dtype.names:
@@ -49,24 +52,29 @@ print("Variables in member catalog:")
 print(mem_full_data.keys())
 # sys.exit()
 
+hdul3 = fits.open("/home/users/ilic/ML/other_cats/comprass.fits")
+ix_red_comp = []
+for i in range(len(hdul3[1].data)):
+    if hdul3[1].data['REDMAPPER'][i] != '':
+        tmp = np.where(hdul3[1].data['REDMAPPER'][i] == hdul1[1].data['NAME'])[0]
+        if len(tmp) != 0:
+            clu_full_data['M500'][tmp[0]] = hdul3[1].data['M500'][i]
+            clu_full_data['M500_ERR_LOW'][tmp[0]] = hdul3[1].data['M500_ERR_LOW'][i]
+            clu_full_data['M500_ERR_UPP'][tmp[0]] = hdul3[1].data['M500_ERR_UPP'][i]
+            ix_red_comp.append(tmp[0])
+
+
 # IDs of clusters and corresponding number of members
 clu_ids, clu_num = np.unique(mem_full_data['ID'], return_counts=True)
 n_clus_tot = len(clu_ids)
-n_mem_max = 100
-# batch_size = 1024
-# n_batch = 5
-batch_size = 1
-n_batch = n_clus_tot
-# n_mem_max = clu_num.max()
-ix_keep_clu = [i for i in range(n_clus_tot) if clu_num[i] <= n_mem_max]
-# clu_counts, clu_counts_num = np.unique(clu_num, return_counts=True)
-# n_mem_max = clu_counts[clu_counts_num.argmax()]
-# ix_keep_clu = [i for i in range(n_clus_tot) if clu_num[i] == n_mem_max]
-np.random.seed(5678)
-# np.random.seed(9012) # b3bis
+n_mem_max = np.inf
+ix_keep_clu = []
+for i in range(n_clus_tot):
+    if (clu_num[i] <= n_mem_max) & (i in ix_red_comp):
+        ix_keep_clu.append(i)
+np.random.seed(134679)
 np.random.shuffle(ix_keep_clu)
 np.random.seed()
-ix_keep_clu = ix_keep_clu[:(batch_size*n_batch)]
 n_clus = len(ix_keep_clu)
 
 # Which feature to use
@@ -74,16 +82,16 @@ feat = ['R', 'P', 'P_FREE', 'THETA_I', 'THETA_R', 'IMAG', 'IMAG_ERR', 'MODEL_MAG
 n_feat = len(feat)
 
 # Which labels to predicts
-labs = ['LAMBDA']
+labs = ['M500']
 n_labs = len(labs)
 
 # Build feature array
 def get_X(i):
     g = mem_full_data['ID'] == clu_ids[i]
     n_mem = clu_num[i]
-    X = np.zeros(n_mem * n_feat)
+    X = np.zeros((n_mem, n_feat))
     for ix, f in enumerate(feat):
-        X[ix::n_feat] = mem_full_data[f][g]
+        X[:, ix] = mem_full_data[f][g]
     return X
 if __name__ == '__main__':
     pool = Pool(32)
@@ -116,93 +124,105 @@ n_valid = len(X_valid)
 
 
 # Define NN model
-n_rand_perm = 100 # b/b3
-# n_rand_perm = 1000 # b2
-# num_neurons_in_f = 100 # b/b2
-# num_neurons_in_f = 30 # b3
-num_neurons_in_f = 60 # b4
+n_rand_rot = 128
+n_rand_perm = 128
+num_neurons_in_f = 40
 num_layers_in_rho = 1
-num_neurons_in_rho = 100
-# num_neurons_in_rho = 200 # b4
+num_neurons_in_rho = 40
+
+def get_randmat():
+    v = np.random.randn(4)
+    v /= np.sqrt(np.sum(v**2.))
+    w, x, y, z, = v
+    mat = np.array([
+        [1-2*y**2-2*z**2,     2*x*y-2*z*w,     2*x*z+2*y*w],
+        [    2*x*y+2*z*w, 1-2*x**2-2*z**2,     2*y*z-2*x*w],
+        [    2*x*z-2*y*w,     2*y*z+2*x*w, 1-2*x**2-2*y**2],
+    ])
+    return mat
+
 
 def generator(inputs, labels, n, batch_size, ixs):
     i = 0
     while True:
-        inputs_batch = np.zeros((batch_size, n_rand_perm, n_mem_max * n_feat))
+        n_mem = clu_num[ixs[i%n]]
+        inputs_batch = np.zeros((batch_size, n_rand_perm, n_mem, n_feat))
         labels_batch = np.zeros((batch_size, n_labs))
         for j in range(batch_size):
-            n_mem = clu_num[ixs[i%n]]
-            ix = np.random.rand(n_mem, n_rand_perm).argsort(axis=0)
-            inputs_batch[j, :, :] = np.hstack((
-                inputs[i%n].reshape(n_mem, n_feat).T[:,ix].T.reshape(n_rand_perm, -1),
-                np.zeros((n_rand_perm, (n_mem_max - n_mem) * n_feat)),
-            ))
+            tmp_input = inputs[i%n]
+            rm1 = get_randmat()
+            rm2 = get_randmat()
+            rm3 = get_randmat()
+            new_vecs = hp.rotator.rotateVector(rm1, tmp_input[:, -3:].T)
+            new_vecs = hp.rotator.rotateVector(rm2, new_vecs)
+            tmp_input[:, -3:] = hp.rotator.rotateVector(rm3, new_vecs).T
+            ######
+            ix = np.random.rand(n_rand_perm, n_mem).argsort(axis=1)
+            # inputs_batch[j, :, :, :] = inputs[i%n][ix, :]
+            inputs_batch[j, :, :, :] = tmp_input[ix, :]
             labels_batch[j, :] = labels[i%n]
-            i += 1
+        i += 1
         yield inputs_batch, labels_batch
 
-# with mirrored_strategy.scope():
-inputs = keras.Input(shape=(n_rand_perm, n_mem_max * n_feat))
-lay1 = Dense(
-    num_neurons_in_f,
-    activation="relu", # b2/b3/b4
-    # activation="tanh",   # b
-    # activation="linear",
-)
-out_lay1 = lay1(inputs)
-output = tf.math.reduce_mean(
-    out_lay1,
-    axis=1,
-)
-rho_lays = []
-for i in range(num_layers_in_rho):
-    rho_lays.append(
-        Dense(
-            num_neurons_in_rho,
-            activation="relu", # b2/b3/b4
-            # activation="tanh",  # b
-            # activation="linear",
-            kernel_initializer=tf.keras.initializers.GlorotUniform(),
-        )
+mirrored_strategy = tf.distribute.MirroredStrategy()
+with mirrored_strategy.scope():
+# if True:
+    inputs = keras.Input(shape=(n_rand_perm, None, n_feat))
+    # lay1 = LSTM(
+    lay1 = GRU(
+    # lay1 = Dense(
+        num_neurons_in_f,
+        # activation="tanh",
+        activation="relu",
+        # activation="linear",
     )
-    output = rho_lays[-1](output)
-lay3 = Dense(
-    n_labs,
-    activation="linear",
-)
-output = lay3(output)
-model = keras.Model(inputs, output)
-model.compile(
-    # loss='mean_absolute_percentage_error',
-    loss='mean_squared_error',
-    optimizer=Adam(
-        learning_rate=0.0001,
-    ),
-    metrics=['accuracy'],
-)
+    out_lay1 = lay1(inputs[0, ...])
+    output = tf.math.reduce_mean(
+        out_lay1,
+        axis=0,
+        keepdims=True,
+    )
+    rho_lays = []
+    for i in range(num_layers_in_rho):
+        rho_lays.append(
+            Dense(
+                num_neurons_in_rho,
+                # activation="tanh",
+                activation="relu",
+                # activation="linear",
+                kernel_initializer=tf.keras.initializers.GlorotUniform(),
+            )
+        )
+        output = rho_lays[-1](output)
+    lay3 = Dense(
+        n_labs,
+        activation="linear",
+    )
+    output = lay3(output)
+    model = keras.Model(inputs, output)
+    model.compile(
+        # loss='mean_absolute_percentage_error',
+        loss='mean_squared_error',
+        optimizer=Adam(
+            learning_rate=0.001,
+        ),
+        metrics=['accuracy'],
+    )
+    model.load_weights('saved_models/inn_mass_calc_gru_v5/inn_mass_calc_gru_v5_last')
+
 model.summary()
 
-# model.load_weights('saved_models/inv_nn_v6b/inv_nn_v6b')
-# model.load_weights('saved_models/inv_nn_v6b2')
-# model.load_weights('saved_models/inv_nn_v6b3/inv_nn_v6b3')
-model.load_weights('saved_models/inv_nn_v6b5/inv_nn_v6b5')
-sys.exit()
+# model.load_weights('saved_models/inn_mass_calc_gru_v5/inn_mass_calc_gru_v5')
+# sys.exit()
 
-# log_filename = "saved_models/inv_nn_v6b/inv_nn_v6b.log"
-# log_filename = "saved_models/inv_nn_v6b2/inv_nn_v6b2.log"
-# log_filename = "saved_models/inv_nn_v6b3/inv_nn_v6b3.log"
-# log_filename = "saved_models/inv_nn_v6b4/inv_nn_v6b4.log"
-log_filename = "saved_models/inv_nn_v6b5/inv_nn_v6b5.log"
+log_filename = "saved_models/inn_mass_calc_gru_v5/inn_mass_calc_gru_v5.log"
 log_cb = tf.keras.callbacks.CSVLogger(
     log_filename,
     separator=' ',
     append=True,
 )
 
-# chk_filename = "saved_models/inv_nn_v6b/inv_nn_v6b"
-# chk_filename = "saved_models/inv_nn_v6b2/inv_nn_v6b2"
-# chk_filename = "saved_models/inv_nn_v6b3/inv_nn_v6b3"
-chk_filename = "saved_models/inv_nn_v6b5/inv_nn_v6b5"
+chk_filename = "saved_models/inn_mass_calc_gru_v5/inn_mass_calc_gru_v5"
 chk_cb = tf.keras.callbacks.ModelCheckpoint(
     filepath=chk_filename,
     monitor='val_loss',
@@ -211,17 +231,27 @@ chk_cb = tf.keras.callbacks.ModelCheckpoint(
     save_weights_only=True,
 )
 
+chk2_filename = "saved_models/inn_mass_calc_gru_v5/inn_mass_calc_gru_v5_last"
+chk2_cb = tf.keras.callbacks.ModelCheckpoint(
+    filepath=chk2_filename,
+    monitor='val_loss',
+    verbose=1,
+    save_best_only=False,
+    save_weights_only=True,
+)
+
 
 # ANN hyperparamters
 nb_epoch=10000
 
+batch_size = n_rand_rot
 history = model.fit(
     generator(X_train, Y_train, n_train, batch_size, ix_train),
     validation_data=generator(X_valid, Y_valid, n_valid, batch_size, ix_valid),
-    steps_per_epoch=n_train // batch_size,
-    validation_steps=n_valid // batch_size,
+    steps_per_epoch=n_train,
+    validation_steps=n_valid,
     epochs=nb_epoch,
-    callbacks=[log_cb, chk_cb],
+    callbacks=[log_cb, chk_cb, chk2_cb],
 )
 
 sys.exit()
@@ -240,8 +270,10 @@ plt.clf()
 
 ##########################################
 
-inputs_test = keras.Input(shape=(n_mem_max * n_feat,))
-lay1_test = Dense(
+inputs_test = keras.Input(shape=(None, n_feat))
+# lay1_test = Dense(
+lay1_test = GRU(
+# lay1_test = LSTM(
     num_neurons_in_f,
     activation="relu",
     # activation="tanh",
@@ -313,6 +345,18 @@ for i in tqdm(range(10)):
             )
 final_pred = eval_out / n_out[: ,None]
 '''
+
+
+eval_out = np.zeros((n_valid, n_labs))
+n_rand_perm_test = 10000
+for i in tqdm(range(n_valid)):
+    n_mem = clu_num[ix_valid[i]]
+    ix = np.random.rand(n_mem).argsort()
+    tmp_input = X_valid[i][None, ix, :]
+    out = model_test.predict(tmp_input)
+    eval_out[i, :] = np.mean(out, axis=0)
+
+########################
 
 eval_out = np.zeros((n_valid, n_labs))
 n_rand_perm_test = 1000

@@ -62,8 +62,9 @@ for i in tqdm(range(n_clus_tot)):
     g2 = clu_full_data['ID'] == clu_ids[i]
     gg = mem_full_data['Z_SPEC'][g1] != -1.
     check2 = gg.sum() > 1
-    check3 = np.std(mem_full_data['Z_SPEC'][g1][gg]) <= 5e-3 if check2 else False
-    if check1 & check2 & check3:
+    # check3 = np.std(mem_full_data['Z_SPEC'][g1][gg]) <= 5e-3 if check2 else False
+    # if check1 & check2 & check3:
+    if check1 & check2:
         ix_keep_clu.append(i)
         clu_full_data['Z_SPEC'][i] = np.mean(mem_full_data['Z_SPEC'][g1][gg])
 n_batch = len(ix_keep_clu)
@@ -125,7 +126,7 @@ n_valid = len(X_valid)
 
 # Define NN model
 n_rand_perm = 100
-num_neurons_in_f = 100
+num_neurons_in_f = 200
 num_layers_in_rho = 1
 num_neurons_in_rho = 100
 
@@ -147,10 +148,11 @@ def generator(inputs, labels, n, batch_size, ixs):
 
 # with mirrored_strategy.scope():
 inputs = keras.Input(shape=(n_rand_perm, n_mem_max * n_feat))
+# lay1 = GRU(
 lay1 = Dense(
     num_neurons_in_f,
-    activation="tanh",
-    # activation="relu",
+    # activation="tanh",
+    activation="relu",
     # activation="linear",
 )
 out_lay1 = lay1(inputs)
@@ -163,8 +165,8 @@ for i in range(num_layers_in_rho):
     rho_lays.append(
         Dense(
             num_neurons_in_rho,
-            # activation="relu",
-            activation="tanh",
+            # activation="tanh",
+            activation="relu",
             # activation="linear",
             kernel_initializer=tf.keras.initializers.GlorotUniform(),
         )
@@ -186,17 +188,17 @@ model.compile(
 )
 model.summary()
 
-model.load_weights('saved_models/inv_nn_v6c/inv_nn_v6c')
-sys.exit()
+# model.load_weights('saved_models/inv_nn_v6c2/inv_nn_v6c2')
+# sys.exit()
 
-log_filename = "saved_models/inv_nn_v6c/inv_nn_v6c.log"
+log_filename = "saved_models/inv_nn_v6c3/inv_nn_v6c3.log"
 log_cb = tf.keras.callbacks.CSVLogger(
     log_filename,
     separator=' ',
     append=True,
 )
 
-chk_filename = "saved_models/inv_nn_v6c/inv_nn_v6c"
+chk_filename = "saved_models/inv_nn_v6c3/inv_nn_v6c3"
 chk_cb = tf.keras.callbacks.ModelCheckpoint(
     filepath=chk_filename,
     monitor='val_loss',
@@ -207,7 +209,7 @@ chk_cb = tf.keras.callbacks.ModelCheckpoint(
 
 
 # ANN hyperparamters
-nb_epoch=1000
+nb_epoch=10000
 
 history = model.fit(
     generator(X_train, Y_train, n_train, batch_size, ix_train),
@@ -237,8 +239,8 @@ plt.clf()
 inputs_test = keras.Input(shape=(n_mem_max * n_feat,))
 lay1_test = Dense(
     num_neurons_in_f,
-    # activation="relu",
-    activation="tanh",
+    activation="relu",
+    # activation="tanh",
     # activation="linear",
 )
 output_test = lay1_test(inputs_test)
@@ -247,8 +249,8 @@ for i in range(num_layers_in_rho):
     rho_lays_test.append(
         Dense(
             num_neurons_in_rho,
-            # activation="relu",
-            activation="tanh",
+            activation="relu",
+            # activation="tanh",
             # activation="linear",
             kernel_initializer=tf.keras.initializers.GlorotUniform(),
         )
@@ -327,7 +329,9 @@ l0 = np.loadtxt('saved_models/inv_nn_v6/inv_nn_v6.log', skiprows=1)
 l1 = np.loadtxt('saved_models/inv_nn_v6b/inv_nn_v6b.log', skiprows=1)
 l2 = np.loadtxt('saved_models/inv_nn_v6c/inv_nn_v6c.log', skiprows=1)
 l3 = np.loadtxt('saved_models/inv_nn_v6b3/inv_nn_v6b3.log', skiprows=1)
-l4 = np.loadtxt('saved_models/inv_nn_v6b2.log', skiprows=1)
+# l4 = np.loadtxt('saved_models/inv_nn_v6b2.log', skiprows=1)
+l4 = np.loadtxt('saved_models/inv_nn_v6c3/inv_nn_v6c3.log', skiprows=1)
+l5 = np.loadtxt('saved_models/inv_nn_v6b4/inv_nn_v6b4.log', skiprows=1)
 fig, ax = plt.subplots(2, 3, sharey=True, figsize=(15, 10))
 ax[0][0].set_yscale('log')
 ax[0][0].plot(l0[1658:, 2], alpha=0.6, label='training loss')
@@ -353,11 +357,50 @@ ax[1][0].legend()
 ax[1][0].set_xlabel('epochs')
 ax[1][0].set_ylabel('mean square error')
 ax[1][1].set_yscale('log')
-ax[1][1].plot(l4[:, 2], alpha=0.6, label='training loss')
-ax[1][1].plot(l4[:, 4], alpha=0.6, label='validation loss')
+ax[0][2].plot(l4[:, 2], alpha=0.6, label='training loss')
+ax[0][2].plot(l4[:, 4], alpha=0.6, label='validation loss')
+ax[0][2].set_xscale('log')
 ax[1][1].legend()
 ax[1][1].set_xlabel('epochs')
 ax[1][1].set_ylabel('mean square error')
-ax[0][0].set_ylim(3e-4, 1e-3)
+ax[1][2].set_yscale('log')
+ax[1][2].plot(l5[:, 2], alpha=0.6, label='training loss')
+ax[1][2].plot(l5[:, 4], alpha=0.6, label='validation loss')
+ax[1][2].legend()
+ax[1][2].set_xlabel('epochs')
+ax[1][2].set_ylabel('mean square error')
+# ax[0][0].set_ylim(2e-4, 1e-3)
 fig.savefig('tmp_loss.pdf')
 
+
+allY2 = np.zeros((n_clus, n_labs))
+for ix, l in enumerate(labs):
+    allY2[:, ix] = clu_full_data['Z_LAMBDA'][ix_keep_clu]
+Y_train2 = allY2[:max_ix]
+Y_valid2 = allY2[max_ix:]
+
+plt.subplot(2,2,1)
+plt.plot(Y_valid[:, 0], eval_out[:, 0], '+')
+plt.subplot(2,2,2)
+plt.plot(Y_valid[:, 0], Y_valid2[:, 0], '+')
+plt.subplot(2,2,3)
+plt.hist2d(Y_valid[:, 0], eval_out[:, 0], bins=32)
+plt.subplot(2,2,4)
+plt.hist2d(Y_valid[:, 0], Y_valid2[:, 0], bins=32)
+plt.savefig('tmp0.pdf')
+dzRED = (Y_valid2[:, 0] - Y_valid[:, 0]) / (1. + Y_valid[:, 0])
+dzNN = (eval_out[:, 0] - Y_valid[:, 0]) / (1. + Y_valid[:, 0])
+pbRED = np.mean(dzRED)
+pbNN = np.mean(dzNN)
+adRED = np.abs(dzRED - np.median(dzRED))
+adNN = np.abs(dzNN - np.median(dzNN))
+madRED = np.median(np.abs(dzRED - np.median(dzRED)))
+madNN = np.median(np.abs(dzNN - np.median(dzNN)))
+foRED = np.sum(np.abs(dzRED) > 0.05) / len(dzRED)
+foNN = np.sum(np.abs(dzNN) > 0.05) / len(dzNN)
+print("                                     RED                           NN   ")
+print("-----------------------------------------------------------------------------")
+print("|  prediction bias         |  %s  |  %s  |" % (pbRED, pbNN))
+print("|  mean absolute deviation |   %s  |   %s  |" % (madRED, madNN))
+print("|  fraction of outliers    |   %s  |   %s  |" % (foRED, foNN))
+print("-----------------------------------------------------------------------------")
