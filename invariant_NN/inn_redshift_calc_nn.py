@@ -15,15 +15,18 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten
 
 
+frac = 9./10. # fraction of data dedicated to training (first try was 4/5)
+
+
 # Free parameters
 # Define NN model
-n_mem_max = 30
+n_mem_max = 2
 n_rand_perm = 128
 n_rand_shift = 64
-num_layers_in_f = 1
-num_neurons_in_f = [64]
-num_layers_in_rho = 1
-num_neurons_in_rho = [64]
+num_layers_in_f = 3
+num_neurons_in_f = [128,128,128]
+num_layers_in_rho = 0
+num_neurons_in_rho = []
 act = "tanh"
 # drop_f = None
 drop_f = 0.5
@@ -34,14 +37,13 @@ l2reg_f = None
 l2reg_rho = None
 # l2reg_rho = 0.01
 loss = 'mean_squared_error'
-learn_rate = 0.001
-labs = ['M500']
+learn_rate = 0.0001
+labs = ['Z_SPEC']
 suff = ''
 # suff = '_8xpermvalid'
-# in_wgt = None
-# in_wgt = 'saved_models/inn_mass_nmm-30_nperm-128_nshft-64_f0-64_r0-64_act-tanh_df-0p5_dr-0p5_l2f-none_l2r-none_loss-mean_squared_error_lr-0p0001/last_weights'
-in_wgt = 'saved_models/inn_mass_nmm-10_nperm-128_nshft-64_f0-64_f1-64_f2-64_r0-64_act-tanh_df-0p5_dr-0p5_l2f-0p01_l2r-0p01_loss-mean_squared_error_lr-0p0001/last_weights'
-# in_wgt = 'saved_models/inn_mass_nmm-5_nperm-128_nshft-64_f0-32_f1-32_f2-32_r0-32_r1-32_act-tanh_df-0p5_dr-0p5_l2f-none_l2r-none_loss-mean_squared_error_lr-0p0001/last_weights'
+in_wgt = None
+# in_wgt = 'saved_models/inn_zspec_nmm-10_nperm-128_nshft-64_f0-128_f1-128_r0-128_act-tanh_df-0p5_dr-0p5_l2f-none_l2r-none_loss-mean_squared_error_lr-0p0001/last_weights'
+
 
 # Path to fits files
 pathData="/home/users/ilic/ML/SDSS_fits_data/"
@@ -59,10 +61,6 @@ decs = clu_full_data['DEC'] / 180. * np.pi
 clu_full_data['X'] = np.cos(decs) * np.cos(ras)
 clu_full_data['Y'] = np.cos(decs) * np.sin(ras)
 clu_full_data['Z'] = np.sin(decs)
-clu_full_data['M500'] = np.zeros(len(hdul1[1].data))
-clu_full_data['log10_M500'] = np.zeros(len(hdul1[1].data))
-clu_full_data['M500_ERR_LOW'] = np.zeros(len(hdul1[1].data))
-clu_full_data['M500_ERR_UPP'] = np.zeros(len(hdul1[1].data))
 
 # Create dictionary of mem gal data from fits + extra derived quantities
 mem_full_data = {}
@@ -81,35 +79,43 @@ print("Variables in member catalog:")
 print(mem_full_data.keys())
 # sys.exit()
 
-# Read cluster mass from Comprass catalogue and add to cluster dictionary
-hdul3 = fits.open("/home/users/ilic/ML/other_cats/comprass.fits")
-ix_red_comp = []
-for i in range(len(hdul3[1].data)):
-    if hdul3[1].data['REDMAPPER'][i] != '':
-        tmp = np.where(hdul3[1].data['REDMAPPER'][i] == hdul1[1].data['NAME'])[0]
-        if len(tmp) != 0:
-            clu_full_data['M500'][tmp[0]] = hdul3[1].data['M500'][i]
-            clu_full_data['log10_M500'][tmp[0]] = np.log10(hdul3[1].data['M500'][i])
-            clu_full_data['M500_ERR_LOW'][tmp[0]] = hdul3[1].data['M500_ERR_LOW'][i]
-            clu_full_data['M500_ERR_UPP'][tmp[0]] = hdul3[1].data['M500_ERR_UPP'][i]
-            ix_red_comp.append(tmp[0])
-
 # Get IDs of clusters and corresponding number of members
 clu_ids, clu_num = np.unique(mem_full_data['ID'], return_counts=True)
 n_clus_tot = len(clu_ids)
 ix_keep_clu = []
 for i in range(n_clus_tot):
-    if i in ix_red_comp:
-        ix_keep_clu.append(i) # Keep only cluster with Comprass mass
+    if clu_full_data['Z_SPEC'][i] != -1.:
+        ix_keep_clu.append(i) # Keep only cluster with z_spec
 
 # Shuffle the clusters with a fixed seed
-np.random.seed(457896)
+np.random.seed(121212)
 np.random.shuffle(ix_keep_clu)
 np.random.seed()
 n_clus = len(ix_keep_clu)
 
 # Choose which mem gal features to use in training
-feat = ['R', 'P', 'P_FREE', 'THETA_I', 'THETA_R', 'IMAG', 'IMAG_ERR', 'MODEL_MAG_U', 'MODEL_MAGERR_U', 'MODEL_MAG_G', 'MODEL_MAGERR_G', 'MODEL_MAG_R', 'MODEL_MAGERR_R', 'MODEL_MAG_I', 'MODEL_MAGERR_I', 'MODEL_MAG_Z', 'MODEL_MAGERR_Z', 'X', 'Y', 'Z']
+feat = [
+    'R',
+    # 'P',
+    # 'P_FREE',
+    'THETA_I',
+    'THETA_R',
+    'IMAG',
+    'IMAG_ERR',
+    'MODEL_MAG_U',
+    'MODEL_MAGERR_U',
+    'MODEL_MAG_G',
+    'MODEL_MAGERR_G',
+    'MODEL_MAG_R',
+    'MODEL_MAGERR_R',
+    'MODEL_MAG_I',
+    'MODEL_MAGERR_I',
+    'MODEL_MAG_Z',
+    'MODEL_MAGERR_Z',
+    'X',
+    'Y',
+    'Z',
+]
 n_feat = len(feat)
 
 # Choose which cluster labels to predict
@@ -141,7 +147,6 @@ for ix, l in enumerate(labs):
     allY[:, ix] = clu_full_data[l][ix_keep_clu]
 
 # Shuffle and split training and validation datasets
-frac = 4./5. # fraction of data dedicated to training
 max_ix = int(n_clus * frac)
 X_train = allX[:max_ix]
 X_valid = allX[max_ix:]
@@ -281,10 +286,10 @@ model.summary()
 
 # Output name
 fname = "inn"
-if labs[0] == "M500":
-    fname += "_mass"
-elif labs[0] == "log10_M500":
-    fname += "_log10mass"
+if labs[0] == "Z_SPEC":
+    fname += "_zspec"
+elif labs[0] == "log10_Z_SPEC":
+    fname += "_log10zspec"
 fname += "_nmm-%s" % n_mem_max
 fname += "_nperm-%s" % n_rand_perm
 fname += "_nshft-%s" % n_rand_shift

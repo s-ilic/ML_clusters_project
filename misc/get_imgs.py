@@ -1,21 +1,19 @@
+import os
+import sys
+import time
 import numpy as np
-from astropy.io import fits
-
 from tqdm import tqdm
-
+from astropy.io import fits
+import matplotlib.pyplot as plt
+from astropy import units as u
+from astropy.coordinates import SkyCoord
 from healpy.projector import GnomonicProj as GP
 
-import os, sys
-
-import matplotlib.pyplot as plt
-
-from astropy.coordinates import SkyCoord
-from astropy import units as u
 
 #################################################################################
 
 # Path to fits files
-pathData="/home/silic/Downloads/"
+pathData="/home/users/ilic/ML/SDSS_fits_data/"
 
 # Read data in fits files
 hdul1 = fits.open(pathData+'redmapper_dr8_public_v6.3_catalog.fits')
@@ -24,13 +22,44 @@ clu_full_data = hdul1[1].data
 mem_full_data = hdul2[1].data
 n_clu = len(clu_full_data)
 
+'''
 for i in tqdm(range(n_clu)[int(sys.argv[1]):][::int(sys.argv[2])]):
     if (clu_full_data['Z_LAMBDA'][i] >= 0.3) & (clu_full_data['Z_LAMBDA'][i] <= 0.45):
         com = "http://skyserver.sdss.org/dr16/SkyServerWS/ImgCutout/getjpeg?ra=%s&dec=%s&width=2048&height=2048" % (clu_full_data['RA'][i], clu_full_data['DEC'][i])
         path = "/home/silic/Downloads/imgs_clusters/%s.jpeg" % clu_full_data['ID'][i]
         if not os.path.isfile(path):
             os.system('wget "%s" -O %s' % (com, path))
+'''
 
+'''
+# for i in tqdm(range(n_clu)[::-1][int(sys.argv[1])::10]):
+for i in tqdm(range(n_clu)):
+    com = "http://skyserver.sdss.org/dr16/SkyServerWS/ImgCutout/getjpeg?ra=%s&dec=%s&width=2048&height=2048" % (clu_full_data['RA'][i], clu_full_data['DEC'][i])
+    path1 = "/home/users/ilic/ML/SDSS_image_data/train/has_cluster/%s.jpeg" % clu_full_data['ID'][i]
+    path2 = "/home/users/ilic/ML/SDSS_image_data/valid/has_cluster/%s.jpeg" % clu_full_data['ID'][i]
+    path3 = "/home/users/ilic/ML/SDSS_image_data/new/%s.jpeg" % clu_full_data['ID'][i]
+    if os.path.isfile(path1):
+        # print("%s.jpeg already in train folder" % clu_full_data['ID'][i])
+        toto = 0
+    elif os.path.isfile(path2):
+        # print("%s.jpeg already in valid folder" % clu_full_data['ID'][i])
+        toto = 0
+    elif os.path.isfile(path3):
+        # print("%s.jpeg already in new folder" % clu_full_data['ID'][i])
+        toto = 0
+    else:
+        os.system('wget -q "%s" -O %s' % (com, path3))
+'''
+
+for i in tqdm(range(n_clu)[int(sys.argv[1])::32]):
+    com = "http://skyserver.sdss.org/dr16/SkyServerWS/ImgCutout/getjpeg?ra=%s&dec=%s&scale=0.792254&width=2048&height=2048" % (clu_full_data['RA'][i], clu_full_data['DEC'][i])
+    path = "/home/users/ilic/ML/SDSS_image_data/redmapper_2048x2048_0p792254/%s.jpeg" % clu_full_data['ID'][i]
+    if os.path.isfile(path):
+        print("%s.jpeg already in new folder" % clu_full_data['ID'][i])
+    else:
+        os.system('wget "%s" -O %s' % (com, path))
+
+sys.exit()
 
 catalog = SkyCoord(ra=clu_full_data['RA']*u.degree, dec=clu_full_data['DEC']*u.degree)
 ran_ra = np.random.rand(200000) * 360.
