@@ -66,7 +66,7 @@ for i, fm in enumerate(feature_maps):
     bbox_tensor = decode(fm, i)
     bbox_tensors.append(bbox_tensor)
 model = tf.keras.Model(input_layer, bbox_tensors)
-model.load_weights("./runs/%s/yolov3_epoch%s" % (cfg.YOLO.ROOT, ntl))
+model.load_weights("./runs/%s/yolov3_epoch%s" % (cfg.YOLO.ROOT, ntl)) #loads the wights from the training
 
 # Main loop
 with open("./runs/%s/valid.txt" % cfg.YOLO.ROOT, 'r') as annotation_file:
