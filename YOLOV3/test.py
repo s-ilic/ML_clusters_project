@@ -68,7 +68,7 @@ for i, fm in enumerate(feature_maps):
 model = tf.keras.Model(input_layer, bbox_tensors)
 model.load_weights("./runs/%s/yolov3_epoch%s" % (cfg.YOLO.ROOT, ntl)) #loads the wights from the training
 
-# Main loop
+# Main loop ~: for each image, runs the network and traces boxes 
 with open("./runs/%s/valid.txt" % cfg.YOLO.ROOT, 'r') as annotation_file:
     for num, line in enumerate(annotation_file):
         if num >= ix_start:
