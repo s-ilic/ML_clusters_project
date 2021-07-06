@@ -40,6 +40,7 @@ writer = tf.summary.create_file_writer(logdir)
 # Load previous weights if resuming some training
 if cfg.RESUME.DO_RESUME:
     model.load_weights("./runs/%s/yolov3_epoch%s" % (cfg.YOLO.ROOT, cfg.RESUME.FROM_EPOCH))
+    global_steps.assign_add((cfg.RESUME.FROM_EPOCH + 1) * steps_per_epoch)
 
 # Main training function
 def train_step(image_data, target):
@@ -75,11 +76,13 @@ def train_step(image_data, target):
         # update learning rate
         global_steps.assign_add(1)
         if global_steps < warmup_steps:
-            lr = global_steps / warmup_steps *cfg.TRAIN.LR_INIT
-        else:
+            lr = global_steps / warmup_steps * cfg.TRAIN.LR_INIT
+        elif global_steps < total_steps:
             lr = cfg.TRAIN.LR_END + 0.5 * (cfg.TRAIN.LR_INIT - cfg.TRAIN.LR_END) * (
                 (1 + tf.cos((global_steps - warmup_steps) / (total_steps - warmup_steps) * np.pi))
             )
+        else:
+            lr = cfg.TRAIN.LR_END
         optimizer.lr.assign(lr.numpy())
 
         # writing summary data

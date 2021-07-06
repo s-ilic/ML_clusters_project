@@ -72,7 +72,3 @@ __C.TEST.IOU_THRESHOLD        = 0.45
 ### RESUME options
 __C.RESUME.DO_RESUME          = False
 __C.RESUME.FROM_EPOCH         = 10
-__C.RESUME.LR_INIT            =
-__C.RESUME.LR_END             =
-__C.RESUME.WARMUP_EPOCHS      =
-__C.RESUME.EPOCHS             =
