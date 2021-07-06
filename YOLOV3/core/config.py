@@ -19,32 +19,32 @@ __C                           = edict()
 
 cfg                           = __C
 
-# YOLO options
+
+### YOLO options
 __C.YOLO                      = edict()
 
-#############################
-######## SILIC SETUP ########
-#############################
+
+### NEW SILIC SETUP
 # __C.YOLO.ROOT = "2048x2048_ds2_0p396_pad50"
 # __C.YOLO.ROOT = "2048x2048_ds4_0p396_pad50"
 __C.YOLO.ROOT = "2048x2048_ds4_0p396_pad50_zcut0p3"
-#############################
 
-# Set the class name
+
+### Set the class name
 __C.YOLO.CLASSES              = "./runs/clusters.names"
 __C.YOLO.ANCHORS              = "./runs/basline_anchors.txt"
 __C.YOLO.STRIDES              = [8, 16, 32]
 __C.YOLO.ANCHOR_PER_SCALE     = 3
 __C.YOLO.IOU_LOSS_THRESH      = 0.5
 
-# Train options
-__C.TRAIN                     = edict()
 
+### Train options
+__C.TRAIN                     = edict()
 __C.TRAIN.ANNOT_PATH          = "./runs/%s/train.txt" % __C.YOLO.ROOT
 __C.TRAIN.BATCH_SIZE          = 8
 # __C.TRAIN.BATCH_SIZE          = 4
 # __C.TRAIN.BATCH_SIZE          = 2
-# __C.TRAIN.INPUT_SIZE            = [320, 352, 384, 416, 448, 480, 512, 544, 576, 608]
+# __C.TRAIN.INPUT_SIZE          = [320, 352, 384, 416, 448, 480, 512, 544, 576, 608]
 # __C.TRAIN.INPUT_SIZE          = [416]
 __C.TRAIN.INPUT_SIZE          = [512]
 __C.TRAIN.DATA_AUG            = True
@@ -56,10 +56,8 @@ __C.TRAIN.WARMUP_EPOCHS       = 4
 __C.TRAIN.EPOCHS              = 30
 
 
-
-# TEST options
+### TEST options
 __C.TEST                      = edict()
-
 __C.TEST.ANNOT_PATH           = "./runs/%s/valid.txt" % __C.YOLO.ROOT
 # __C.TEST.BATCH_SIZE           = 2
 __C.TEST.BATCH_SIZE           = 1
@@ -71,3 +69,10 @@ __C.TEST.SCORE_THRESHOLD      = 0.3
 __C.TEST.IOU_THRESHOLD        = 0.45
 
 
+### RESUME options
+__C.RESUME.DO_RESUME          = False
+__C.RESUME.FROM_EPOCH         = 10
+__C.RESUME.LR_INIT            =
+__C.RESUME.LR_END             =
+__C.RESUME.WARMUP_EPOCHS      =
+__C.RESUME.EPOCHS             =

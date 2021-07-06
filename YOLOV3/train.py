@@ -1,16 +1,3 @@
-#! /usr/bin/env python
-# coding=utf-8
-#================================================================
-#   Copyright (C) 2019 * Ltd. All rights reserved.
-#
-#   Editor      : VIM
-#   File name   : train.py
-#   Author      : YunYang1994
-#   Created date: 2019-07-18 09:18:54
-#   Description :
-#
-#================================================================
-
 import os
 import time
 import shutil
@@ -22,34 +9,39 @@ from core.dataset import Dataset
 from core.yolov3 import YOLOv3, decode, compute_loss
 from core.config import cfg
 
-load_mode = False
 
+# Read training and validation sets
 trainset = Dataset('train')
 validset = Dataset('valid')
 
+# Set up some variables
 logdir = "./runs/%s/log" % cfg.YOLO.ROOT
 steps_per_epoch = len(trainset)
 global_steps = tf.Variable(1, trainable=False, dtype=tf.int64)
 warmup_steps = cfg.TRAIN.WARMUP_EPOCHS * steps_per_epoch
 total_steps = cfg.TRAIN.EPOCHS * steps_per_epoch
 
-# input_tensor = tf.keras.layers.Input([416, 416, 3])
+# Define input/output tensors for model creation
 input_tensor = tf.keras.layers.Input([cfg.TRAIN.INPUT_SIZE[0],cfg.TRAIN.INPUT_SIZE[0],3])
 conv_tensors = YOLOv3(input_tensor)
-
 output_tensors = []
 for i, conv_tensor in enumerate(conv_tensors):
     pred_tensor = decode(conv_tensor, i)
     output_tensors.append(conv_tensor)
     output_tensors.append(pred_tensor)
 
+# Create model, logs, and output directories (if needed)
 model = tf.keras.Model(input_tensor, output_tensors)
-if load_mode:
-    model.load_weights("./runs/%s/yolov3" % cfg.YOLO.ROOT)
 optimizer = tf.keras.optimizers.Adam()
-if os.path.exists(logdir): shutil.rmtree(logdir)
+if os.path.exists(logdir):
+    shutil.rmtree(logdir)
 writer = tf.summary.create_file_writer(logdir)
 
+# Load previous weights if resuming some training
+if cfg.RESUME.DO_RESUME:
+    model.load_weights("./runs/%s/yolov3_epoch%s" % (cfg.YOLO.ROOT, cfg.RESUME.FROM_EPOCH))
+
+# Main training function
 def train_step(image_data, target):
     with tf.GradientTape() as tape:
         pred_result = model(image_data, training=True)
@@ -99,8 +91,12 @@ def train_step(image_data, target):
             tf.summary.scalar("loss/prob_loss", prob_loss, step=global_steps)
         writer.flush()
 
-if os.path.exists(logdir + '_valid'): shutil.rmtree(logdir + '_valid')
+# Create validation log
+if os.path.exists(logdir + '_valid'):
+    shutil.rmtree(logdir + '_valid')
 validate_writer = tf.summary.create_file_writer(logdir + '_valid')
+
+# Main validation function
 def validate_step(image_data, target):
     with tf.GradientTape() as tape:
         pred_result = model(image_data, training=False)
@@ -135,13 +131,11 @@ def validate_step(image_data, target):
         return total_loss
 
 
-# old_loss = np.inf
+# Main loop
 for epoch in range(cfg.TRAIN.EPOCHS):
     print("Epoch %s out of %s" % (epoch + 1, cfg.TRAIN.EPOCHS))
     for image_data, target in tqdm(trainset, smoothing=1):
         train_step(image_data, target)
     for image_data, target in tqdm(validset, smoothing=1):
         valid_loss = validate_step(image_data, target)
-    # if valid_loss < old_loss:
     model.save_weights("./runs/%s/yolov3_epoch%s" % (cfg.YOLO.ROOT, epoch))
-    # old_loss = valid_loss
