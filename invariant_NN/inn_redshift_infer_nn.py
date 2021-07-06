@@ -430,3 +430,110 @@ plt.legend()
 plt.tight_layout()
 plt.savefig('error_plot_16.pdf')
 
+#########################
+
+z_nn = Y_valid[:, 0]
+z_spec = eval_out[2, :, 0]
+z_lambda = clu_full_data['Z_LAMBDA'][ix_valid]
+
+# resid
+dz_nn = (z_nn - z_spec) / (1. + z_spec)
+dz_lambda = (z_lambda - z_spec) / (1. + z_spec)
+# pred bias
+mdz_nn = np.mean(dz_nn)
+mdz_lambda = np.mean(dz_lambda)
+print(mdz_nn, mdz_lambda)
+# MAD
+MAD_nn = np.median(np.abs(dz_nn - mdz_nn))
+MAD_lambda = np.median(np.abs(dz_lambda - mdz_lambda))
+print(MAD_nn, MAD_lambda)
+# MAD dev
+sMAD_nn = 1.4826 * MAD_nn
+sMAD_lambda = 1.4826 * MAD_lambda
+print(sMAD_nn, sMAD_lambda)
+# frac outliers
+out_nn = np.abs(dz_nn) > 0.05
+out_lambda = np.abs(dz_lambda) > 0.05
+print(np.sum(out_nn) / 3139., np.sum(out_lambda) / 3139.)
+
+
+plt.figure(figsize=(10,5))
+plt.subplot(1,2,1)
+plt.hist(dz_nn, bins=32, alpha=0.5, label='NN',density=True)
+plt.hist(dz_lambda, bins=32, alpha=0.5, label='redMaPPer',density=True)
+plt.legend()
+plt.xlabel("(z - z_spec) / (1 + z_spec)")
+plt.tight_layout()
+plt.subplot(1,2,2)
+plt.hist(dz_nn, bins=32, alpha=0.5, label='NN',density=True)
+plt.hist(dz_lambda, bins=32, alpha=0.5, label='redMaPPer',density=True)
+plt.legend()
+plt.yscale('log')
+plt.xlabel("(z - z_spec) / (1 + z_spec)")
+plt.tight_layout()
+plt.savefig("residuals.png")
+plt.clf()
+
+h, b = np.histogram(z_spec, bins=32)
+
+x, y1, y2 = [], [], []
+for i in range(len(h)):
+    x.append(b[i])
+    x.append(b[i+1])
+    g = (z_spec >= b[i]) & (z_spec <= b[i+1])
+    y1.append(np.mean(dz_nn[g]))
+    y1.append(np.mean(dz_nn[g]))
+    y2.append(np.mean(dz_lambda[g]))
+    y2.append(np.mean(dz_lambda[g]))
+plt.plot(x, y1, label='NN')
+plt.plot(x, y2, label='redMaPPer')
+plt.xlabel("z_spec")
+plt.ylabel("Prediction bias")
+plt.axhline(0., ls='--', color='black')
+plt.legend()
+plt.tight_layout()
+plt.savefig("pred_bias.png")
+plt.clf()
+
+x, y1, y2 = [], [], []
+for i in range(len(h)):
+    x.append(b[i])
+    x.append(b[i+1])
+    g = (z_spec >= b[i]) & (z_spec <= b[i+1])
+    mdz_nn = np.mean(dz_nn[g])
+    mdz_lambda = np.mean(dz_lambda[g])
+    MAD_nn = np.median(np.abs(dz_nn[g] - mdz_nn))
+    MAD_lambda = np.median(np.abs(dz_lambda[g] - mdz_lambda))
+    y1.append(MAD_nn)
+    y1.append(MAD_nn)
+    y2.append(MAD_lambda)
+    y2.append(MAD_lambda)
+plt.plot(x, y1, label='NN')
+plt.plot(x, y2, label='redMaPPer')
+plt.xlabel("z_spec")
+plt.ylabel("MAD")
+plt.axhline(0., ls='--', color='black')
+plt.legend()
+plt.tight_layout()
+plt.savefig("MAD.png")
+plt.clf()
+
+x, y1, y2 = [], [], []
+for i in range(len(h)):
+    x.append(b[i])
+    x.append(b[i+1])
+    g = (z_spec >= b[i]) & (z_spec <= b[i+1])
+    g2 = np.abs(dz_nn[g]) > 0.05
+    y1.append(100. * g2.sum() / g.sum())
+    y1.append(100. * g2.sum() / g.sum())
+    g2 = np.abs(dz_lambda[g]) > 0.05
+    y2.append(100. * g2.sum() / g.sum())
+    y2.append(100. * g2.sum() / g.sum())
+plt.semilogy(x, y1, label='NN')
+plt.semilogy(x, y2, label='redMaPPer')
+plt.xlabel("z_spec")
+plt.ylabel("Percentage of outliers")
+plt.legend()
+plt.tight_layout()
+plt.savefig("outliers.png")
+plt.clf()

@@ -183,3 +183,17 @@ class ShuffleRepeatVector(Layer):
         config = {'n': self.n}
         base_config = super(ShuffleRepeatVector, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+class DeepSetsLayer(tf.keras.layers.Layer):
+    def __init__(self, num_inputs, num_outputs):
+        super(DeepSetsLayer, self).__init__()
+        self.num_inputs = num_inputs
+        self.num_outputs = num_outputs
+
+    def build(self, input_shape):
+        self.Gamma = self.add_variable("Gamma", shape=[self.num_inputs, self.num_outputs])
+        self.Lambda = self.add_variable("Lambda", shape=[self.num_inputs, self.num_outputs])
+
+    def call(self, input):
+        oneoneT = tf.ones([input.shape[-2], input.shape[-2]])
+        return tf.matmul(input, self.Lambda) - tf.matmul(oneoneT, tf.matmul(input, self.Gamma))
