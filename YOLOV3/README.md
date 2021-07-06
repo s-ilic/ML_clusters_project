@@ -1,6 +1,6 @@
 ## [TensorFlow2.x-YOLOv3](https://yunyang1994.github.io/posts/YOLOv3/#more)
 --------------------
-A minimal tensorflow implementation of YOLOv3, with support for training, inference and evaluation.
+A minimal tensorflow implementation of YOLOv3, with support for training, inference and evaluation. 
 
 ## Installation
 --------------------
