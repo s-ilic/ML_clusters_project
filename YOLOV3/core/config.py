@@ -70,5 +70,6 @@ __C.TEST.IOU_THRESHOLD        = 0.45 # to be understood
 
 
 ### RESUME options - Stephane to continue or stop training
+__C.RESUME                    = edict()
 __C.RESUME.DO_RESUME          = False
 __C.RESUME.FROM_EPOCH         = 10

@@ -1,4 +1,5 @@
 import os
+import json
 import time
 import shutil
 import numpy as np
@@ -36,6 +37,9 @@ optimizer = tf.keras.optimizers.Adam()
 if os.path.exists(logdir):
     shutil.rmtree(logdir)
 writer = tf.summary.create_file_writer(logdir)
+out_cfgfile = open("./runs/%s/input_cfg.txt" % cfg.YOLO.ROOT, "w")
+json.dump(cfg, out_cfgfile, indent = 4)
+out_cfgfile.close()
 
 # Load previous weights if resuming some training
 if cfg.RESUME.DO_RESUME:
