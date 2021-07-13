@@ -64,10 +64,14 @@ def train_step(image_data, target):
 
         gradients = tape.gradient(total_loss, model.trainable_variables)
         optimizer.apply_gradients(zip(gradients, model.trainable_variables))
-        # tf.print("=> STEP %4d   lr: %.6f   giou_loss: %4.2f   conf_loss: %4.2f   "
-        #          "prob_loss: %4.2f   total_loss: %4.2f" %(global_steps, optimizer.lr.numpy(),
-        #                                                   giou_loss, conf_loss,
-        #                                                   prob_loss, total_loss))
+        if cfg.TRAIN.VERBOSE:
+            n_epoch = global_steps // steps_per_epoch
+            tf.print("=> EPOCH/STEP : %d/%s" % (n_epoch, global_steps))
+            tf.print("   * learning rate = %e" % optimizer.lr.numpy())
+            tf.print("   * giou_loss = %e" % giou_loss)
+            tf.print("   * conf_loss = %e" % conf_loss)
+            tf.print("   * prob_loss = %e" % prob_loss)
+            tf.print("   * total_loss = %e" % total_loss)
         tf.print(
             "%d  %e  %e  %e  %e  %e" % (
                 global_steps,

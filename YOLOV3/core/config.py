@@ -46,6 +46,9 @@ __C.YOLO.IOU_LOSS_THRESH      = 0.5
 
 __C.TRAIN                     = edict()
 
+### Verbose mode (print losses during training)
+__C.TRAIN.VERBOSE             = True
+
 ### Training options
 __C.TRAIN.ANNOT_PATH          = "./runs/%s/train.txt" % __C.YOLO.ROOT  #file with path to training images, one line each image and bounding box on the same line
 __C.TRAIN.BATCH_SIZE          = 8 #how many images per batch
