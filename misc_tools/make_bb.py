@@ -85,15 +85,17 @@ if __name__ == '__main__':
     pool.close()
     pool.join()
 
+### Write box file
 import json
 with open("all_bb_2048x2048_0p396_pad50.txt", "w") as fp:
     json.dump(res, fp)
-'''
+
+### Read box file
 import json
 fname = 'all_bb_2048x2048_0p396_pad50.txt'
 with open(fname, "r") as fp:
     res = json.load(fp)
-'''
+
 ################################
 ########## FOR YOLOV3 ##########
 ################################

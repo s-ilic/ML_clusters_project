@@ -50,7 +50,7 @@ out_cfgfile.close()
 #   3) adjust starting value of learning rate where it left off
 if cfg.RESUME.DO_RESUME:
     model.load_weights("./runs/%s/yolov3_epoch%s" % (cfg.YOLO.ROOT, cfg.RESUME.FROM_EPOCH))
-    global_steps.assign_add((cfg.RESUME.FROM_EPOCH + 1) * steps_per_epoch + 1)
+    global_steps.assign_add((cfg.RESUME.FROM_EPOCH + 1) * steps_per_epoch)
     if global_steps < warmup_steps:
         starting_lr = global_steps.numpy() / warmup_steps * cfg.TRAIN.LR_INIT
     elif global_steps < total_steps:
