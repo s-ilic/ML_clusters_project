@@ -106,7 +106,12 @@ with open("./runs/%s/valid.txt" % cfg.YOLO.ROOT, 'r') as annotation_file:
             pred_bbox = [tf.reshape(x, (-1, tf.shape(x)[-1])) for x in pred_bbox]
             pred_bbox = tf.concat(pred_bbox, axis=0)
             bboxes = utils.postprocess_boxes(pred_bbox, image_size, INPUT_SIZE, cfg.TEST.SCORE_THRESHOLD)
-            bboxes = utils.nms(bboxes, cfg.TEST.IOU_THRESHOLD, method='nms')
+            bboxes = utils.nms(
+                bboxes,
+                cfg.TEST.IOU_THRESHOLD,
+                method=cfg.TEST.IOU_METHOD,
+                sigma=cfg.TEST.SIGMA,
+            )
 
             # Draw boxes and galaxies in image
             if detected_image_path is not None:

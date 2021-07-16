@@ -158,7 +158,23 @@ def bboxes_iou(boxes1, boxes2):
 
 def nms(bboxes, iou_threshold, sigma=0.3, method='nms'):
     """
+    NB: NMS == "Non-maximum suppression"
     :param bboxes: (xmin, ymin, xmax, ymax, score, class)
+
+    What it does:
+    _get all boxes detected by YOLO network
+    _make unique list of detected classes
+    _loop on those classes :
+        _select detected boxes with that class
+        _while that list is not empty :
+            _grab "best" box with the highest score
+            _store it for output
+            _pop that box from the list
+            _compute IOUs of best box wrt all the remaining ones in the list
+            _for all the IOUs > threshold, set score to 0 (if nms method)
+            or for all boxes, multiply score by exp(-IOU^2/sigma) (if soft-nms)
+            _pop all the boxes with score 0 from the list
+    _return all stored boxes
 
     Note: soft-nms, https://arxiv.org/pdf/1704.04503.pdf
           https://github.com/bharatsingh430/soft-nms

@@ -14,7 +14,7 @@ __C.YOLO                      = edict()
 ### Choose name of output folder (code will create it in "./runs")
 # __C.YOLO.ROOT = "2048x2048_ds2_0p396_pad50"
 # __C.YOLO.ROOT = "2048x2048_ds4_0p396_pad50"
-__C.YOLO.ROOT = "2048x2048_ds4_0p396_pad50_zcut0p3" # Root of output files
+__C.YOLO.ROOT = "2048x2048_ds4_0p396_pad50_zcut0p3"
 
 ### File containing the YOLO classes names
 __C.YOLO.CLASSES              = "./runs/clusters.names"
@@ -35,8 +35,15 @@ __C.YOLO.STRIDES              = [8, 16, 32]
 ### Self explanatory
 __C.YOLO.ANCHOR_PER_SCALE     = 3
 
-
-### "Intersection Over Union" loss threshold :- 1 perfect, 0 not the good box - IOU = intersection over union
+### "Intersection Over Union" loss threshold
+### From https://stats.stackexchange.com/a/384201 :
+### "First, one predicted box is assigned to the ground truth based on which predicted
+### box has the (highest?) IoU. Then you have all the other predicted boxes that may not
+### have had the highest IoU but do have an IoU over 0.5 with the object. These
+### predicted boxes are not assigned to a ground truth but from what I understand, they
+### are not included in the loss function (i.e. the last section for no object). Only
+### predicted boxes which have an IoU of less than 0.5 with any object are considered in
+### the no object loss."
 __C.YOLO.IOU_LOSS_THRESH      = 0.5
 
 
@@ -49,21 +56,42 @@ __C.TRAIN                     = edict()
 ### Verbose mode (print losses during training)
 __C.TRAIN.VERBOSE             = True
 
-### Training options
-__C.TRAIN.ANNOT_PATH          = "./runs/%s/train.txt" % __C.YOLO.ROOT  #file with path to training images, one line each image and bounding box on the same line
-__C.TRAIN.BATCH_SIZE          = 8 #how many images per batch
+### Path to text file "pointing" to the training set of images; each line of the file
+### should contain the full path to an image, followed by the list of bounding boxes
+### (+ class number) for all objects in said image
+__C.TRAIN.ANNOT_PATH          = "./runs/%s/train.txt" % __C.YOLO.ROOT
+
+# Number of training epochs
+__C.TRAIN.EPOCHS              = 30
+
+### How many training images per batch (careful, can saturate GPU memory quickly)
+__C.TRAIN.BATCH_SIZE          = 8
 # __C.TRAIN.BATCH_SIZE          = 4
 # __C.TRAIN.BATCH_SIZE          = 2
+
+### List of image sizes which the program randomly picks at training time, and into
+### which the input images are converted into
 # __C.TRAIN.INPUT_SIZE          = [320, 352, 384, 416, 448, 480, 512, 544, 576, 608]
-# __C.TRAIN.INPUT_SIZE          = [416]
-__C.TRAIN.INPUT_SIZE          = [512] # automatic rescaling to this size in pixels
+__C.TRAIN.INPUT_SIZE          = [512]
+
+### Choose whether to perform data augmentation (namely, horizontal flip, crop, and
+### translation) on training images
 __C.TRAIN.DATA_AUG            = True # data augmentation shift + rotation + flip ?
+
+### Initial and final learning rate, and number of "warmup epochs"
+### During the warmup, the learning rate "lr" evolves as:
+###    lr = X / WARMUP_EPOCHS * LR_INIT
+### and afterwards as:
+###    lr = LR_END + 0.5 * (LR_INIT - LR_END) *
+####      [1 + cos(pi * (X - WARMUP_EPOCHS)/(EPOCHS - WARMUP_EPOCHS))]
+#### where X = current_step / steps_per_epoch
+###
 # __C.TRAIN.LR_INIT             = 1e-3
 __C.TRAIN.LR_INIT             = 1e-4  # intial learning rate
 __C.TRAIN.LR_END              = 1e-6 # final learning rate
 # __C.TRAIN.WARMUP_EPOCHS       = 2
-__C.TRAIN.WARMUP_EPOCHS       = 4 #initial learning rate different for these epochs and then final learning rate
-__C.TRAIN.EPOCHS              = 30
+__C.TRAIN.WARMUP_EPOCHS       = 4
+
 
 ####################
 ### Test options ###
@@ -71,19 +99,42 @@ __C.TRAIN.EPOCHS              = 30
 
 __C.TEST                      = edict()
 
-### TEST options
+### Same definitions as for TRAIN variables, but for test images
 __C.TEST.ANNOT_PATH           = "./runs/%s/valid.txt" % __C.YOLO.ROOT
-# __C.TEST.BATCH_SIZE           = 2
-__C.TEST.BATCH_SIZE           = 1 #1 batch per image, so that he can do the plot with loss per image
-# __C.TEST.INPUT_SIZE           = 544
+__C.TEST.BATCH_SIZE           = 1
 __C.TEST.INPUT_SIZE           = 512
 __C.TEST.DATA_AUG             = False
-__C.TEST.DECTECTED_IMAGE_PATH = "./runs/%s/detection/" % __C.YOLO.ROOT #plot bounding box + galaxies in clusters (Stephane)
-__C.TEST.SCORE_THRESHOLD      = 0.3 #prob associated to bounding box threshold
-__C.TEST.IOU_THRESHOLD        = 0.45 # to be understood
+
+### Discard predicted boxes whose score is below this threshold
+__C.TEST.SCORE_THRESHOLD      = 0.3
+
+### Which method for "pruning" detected boxes
+### (see nms function in core/utils.py)
+__C.TEST.IOU_METHOD        = 'nms'
+# __C.TEST.IOU_METHOD        = 'soft-nms'
+
+### Sigma setting for 'soft-nms' method
+### (see nms function in core/utils.py)
+### NB: setting ignored if TEST.IOU_METHOD = 'nms'
+__C.TEST.SIGMA     = 0.3
+
+### Discard boxes that have IOU higher than this threshold with a box of higher score
+### (see nms function in core/utils.py)
+### NB: setting ignored if TEST.IOU_METHOD = 'soft-nms'
+__C.TEST.IOU_THRESHOLD        = 0.45
 
 
-### RESUME options - Stephane to continue or stop training
+######################
+### Resume options ###
+######################
+
 __C.RESUME                    = edict()
+
+### Resume training from a previous run (don't touch previous settings, they are needed)
 __C.RESUME.DO_RESUME          = False
+
+### End of which previous epoch to use as starting point (0-indexed)
 __C.RESUME.FROM_EPOCH         = 10
+
+### How many more epochs of training requested
+__C.RESUME.EPOCHS         = 1000

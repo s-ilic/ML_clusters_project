@@ -31,17 +31,21 @@ for i, conv_tensor in enumerate(conv_tensors):
     output_tensors.append(conv_tensor)
     output_tensors.append(pred_tensor)
 
-# Create model, logs, and output directories (if needed)
+# Create model and optimizer
 model = tf.keras.Model(input_tensor, output_tensors)
 optimizer = tf.keras.optimizers.Adam()
+
+# Create TF log directory (for tensorboard), cleans it beforehand if already exists
 if os.path.exists(logdir):
     shutil.rmtree(logdir)
 writer = tf.summary.create_file_writer(logdir)
+
+# Create copy of config file for safe keeping
 out_cfgfile = open("./runs/%s/input_cfg.txt" % cfg.YOLO.ROOT, "w")
 json.dump(cfg, out_cfgfile, indent = 4)
 out_cfgfile.close()
 
-# Load previous weights if resuming some training
+# Load previous weights if resuming training and adjust global_steps counter
 if cfg.RESUME.DO_RESUME:
     model.load_weights("./runs/%s/yolov3_epoch%s" % (cfg.YOLO.ROOT, cfg.RESUME.FROM_EPOCH))
     global_steps.assign_add((cfg.RESUME.FROM_EPOCH + 1) * steps_per_epoch)
@@ -49,21 +53,25 @@ if cfg.RESUME.DO_RESUME:
 # Main training function
 def train_step(image_data, target):
     with tf.GradientTape() as tape:
+
+        # Predict result
         pred_result = model(image_data, training=True)
         giou_loss=conf_loss=prob_loss=0
 
-        # optimizing process
+        # Compute losses
         for i in range(3):
             conv, pred = pred_result[i*2], pred_result[i*2+1]
             loss_items = compute_loss(pred, conv, *target[i], i)
             giou_loss += loss_items[0]
             conf_loss += loss_items[1]
             prob_loss += loss_items[2]
-
         total_loss = giou_loss + conf_loss + prob_loss
 
+        # Apply gradient
         gradients = tape.gradient(total_loss, model.trainable_variables)
         optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+
+        # Print progress on screen (optional) and in a log file
         if cfg.TRAIN.VERBOSE:
             n_epoch = global_steps // steps_per_epoch
             tf.print("=> EPOCH/STEP : %d/%s" % (n_epoch, global_steps))
@@ -81,7 +89,8 @@ def train_step(image_data, target):
             ),
             output_stream='file:///home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/%s/log_train.txt' % cfg.YOLO.ROOT,
         )
-        # update learning rate
+
+        # Update learning rate
         global_steps.assign_add(1)
         if global_steps < warmup_steps:
             lr = global_steps / warmup_steps * cfg.TRAIN.LR_INIT
@@ -93,7 +102,7 @@ def train_step(image_data, target):
             lr = cfg.TRAIN.LR_END
         optimizer.lr.assign(lr.numpy())
 
-        # writing summary data
+        # Writing summary data in TF log folder (for tensorboard)
         with writer.as_default():
             tf.summary.scalar("lr", optimizer.lr, step=global_steps)
             tf.summary.scalar("loss/total_loss", total_loss, step=global_steps)
@@ -102,7 +111,7 @@ def train_step(image_data, target):
             tf.summary.scalar("loss/prob_loss", prob_loss, step=global_steps)
         writer.flush()
 
-# Create validation log
+# Create TF log directory for validation
 if os.path.exists(logdir + '_valid'):
     shutil.rmtree(logdir + '_valid')
 validate_writer = tf.summary.create_file_writer(logdir + '_valid')
@@ -110,18 +119,21 @@ validate_writer = tf.summary.create_file_writer(logdir + '_valid')
 # Main validation function
 def validate_step(image_data, target):
     with tf.GradientTape() as tape:
+
+        # Predict result
         pred_result = model(image_data, training=False)
         giou_loss=conf_loss=prob_loss=0
 
-        # optimizing process
+        # Compute losses
         for i in range(3):
             conv, pred = pred_result[i*2], pred_result[i*2+1]
             loss_items = compute_loss(pred, conv, *target[i], i)
             giou_loss += loss_items[0]
             conf_loss += loss_items[1]
             prob_loss += loss_items[2]
-
         total_loss = giou_loss + conf_loss + prob_loss
+
+        # Print progress on screen (optional) and in a log file
         tf.print(
             "%d  %e  %e  %e  %e  %e" % (
                 global_steps,
@@ -131,7 +143,8 @@ def validate_step(image_data, target):
             ),
             output_stream='file:///home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/%s/log_valid.txt' % cfg.YOLO.ROOT,
         )
-        # writing summary data
+
+        # Writing summary data in TF log folder (for tensorboard)
         with validate_writer.as_default():
             tf.summary.scalar("lr", optimizer.lr, step=global_steps)
             tf.summary.scalar("validate_loss/total_loss", total_loss, step=global_steps)
@@ -143,10 +156,16 @@ def validate_step(image_data, target):
 
 
 # Main loop
-for epoch in range(cfg.TRAIN.EPOCHS):
-    print("Epoch %s out of %s" % (epoch + 1, cfg.TRAIN.EPOCHS))
+n_epochs = cfg.RESUME.EPOCHS if cfg.RESUME.DO_RESUME else cfg.TRAIN.EPOCHS
+n_ini_epoch = (cfg.RESUME.FROM_EPOCH + 1) if cfg.RESUME.DO_RESUME else 0
+for i in range(n_epochs):
+    # Print progress
+    print("Epoch %s out of %s" % (i + 1, n_epochs))
+    # Training
     for image_data, target in tqdm(trainset, smoothing=1):
         train_step(image_data, target)
+    # Validation
     for image_data, target in tqdm(validset, smoothing=1):
         valid_loss = validate_step(image_data, target)
-    model.save_weights("./runs/%s/yolov3_epoch%s" % (cfg.YOLO.ROOT, epoch))
+    # Save weights
+    model.save_weights("./runs/%s/yolov3_epoch%s" % (cfg.YOLO.ROOT, n_ini_epoch + i))
