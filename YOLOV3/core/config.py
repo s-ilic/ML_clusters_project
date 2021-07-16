@@ -14,7 +14,8 @@ __C.YOLO                      = edict()
 ### Choose name of output folder (code will create it in "./runs")
 # __C.YOLO.ROOT = "2048x2048_ds2_0p396_pad50"
 # __C.YOLO.ROOT = "2048x2048_ds4_0p396_pad50"
-__C.YOLO.ROOT = "2048x2048_ds4_0p396_pad50_zcut0p3"
+# __C.YOLO.ROOT = "2048x2048_ds4_0p396_pad50_zcut0p3"
+__C.YOLO.ROOT = "test"
 
 ### File containing the YOLO classes names
 __C.YOLO.CLASSES              = "./runs/clusters.names"
@@ -131,10 +132,10 @@ __C.TEST.IOU_THRESHOLD        = 0.45
 __C.RESUME                    = edict()
 
 ### Resume training from a previous run (don't touch previous settings, they are needed)
-__C.RESUME.DO_RESUME          = False
+__C.RESUME.DO_RESUME          = True
 
 ### End of which previous epoch to use as starting point (0-indexed)
-__C.RESUME.FROM_EPOCH         = 10
+__C.RESUME.FROM_EPOCH         = 29
 
 ### How many more epochs of training requested
 __C.RESUME.EPOCHS         = 1000

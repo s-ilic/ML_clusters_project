@@ -33,7 +33,6 @@ for i, conv_tensor in enumerate(conv_tensors):
 
 # Create model and optimizer
 model = tf.keras.Model(input_tensor, output_tensors)
-optimizer = tf.keras.optimizers.Adam()
 
 # Create TF log directory (for tensorboard), cleans it beforehand if already exists
 if os.path.exists(logdir):
@@ -45,10 +44,26 @@ out_cfgfile = open("./runs/%s/input_cfg.txt" % cfg.YOLO.ROOT, "w")
 json.dump(cfg, out_cfgfile, indent = 4)
 out_cfgfile.close()
 
-# Load previous weights if resuming training and adjust global_steps counter
+# If resuming training:
+#   1) load previous weights
+#   2) adjust global_steps counter
+#   3) adjust starting value of learning rate where it left off
 if cfg.RESUME.DO_RESUME:
     model.load_weights("./runs/%s/yolov3_epoch%s" % (cfg.YOLO.ROOT, cfg.RESUME.FROM_EPOCH))
-    global_steps.assign_add((cfg.RESUME.FROM_EPOCH + 1) * steps_per_epoch)
+    global_steps.assign_add((cfg.RESUME.FROM_EPOCH + 1) * steps_per_epoch + 1)
+    if global_steps < warmup_steps:
+        starting_lr = global_steps.numpy() / warmup_steps * cfg.TRAIN.LR_INIT
+    elif global_steps < total_steps:
+        starting_lr = cfg.TRAIN.LR_END + 0.5 * (cfg.TRAIN.LR_INIT - cfg.TRAIN.LR_END) * (
+            (1 + tf.cos((global_steps.numpy() - warmup_steps) / (total_steps - warmup_steps) * np.pi))
+        )
+    else:
+        starting_lr = cfg.TRAIN.LR_END
+else:
+    starting_lr = 1. / warmup_steps * cfg.TRAIN.LR_INIT
+
+# Create optimizer
+optimizer = tf.keras.optimizers.Adam(learning_rate=starting_lr)
 
 # Main training function
 def train_step(image_data, target):
@@ -74,7 +89,7 @@ def train_step(image_data, target):
         # Print progress on screen (optional) and in a log file
         if cfg.TRAIN.VERBOSE:
             n_epoch = global_steps // steps_per_epoch
-            tf.print("=> EPOCH/STEP : %d/%s" % (n_epoch, global_steps))
+            tf.print("=> EPOCH/STEP : %d/%s" % (n_epoch, global_steps.numpy()))
             tf.print("   * learning rate = %e" % optimizer.lr.numpy())
             tf.print("   * giou_loss = %e" % giou_loss)
             tf.print("   * conf_loss = %e" % conf_loss)
@@ -99,7 +114,7 @@ def train_step(image_data, target):
                 (1 + tf.cos((global_steps - warmup_steps) / (total_steps - warmup_steps) * np.pi))
             )
         else:
-            lr = cfg.TRAIN.LR_END
+            lr = global_steps / global_steps * cfg.TRAIN.LR_END
         optimizer.lr.assign(lr.numpy())
 
         # Writing summary data in TF log folder (for tensorboard)
