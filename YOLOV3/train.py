@@ -1,14 +1,12 @@
 import os
 import json
-import time
 import shutil
 import numpy as np
 import tensorflow as tf
-import core.utils as utils
 from tqdm import tqdm
+from core.config import cfg
 from core.dataset import Dataset
 from core.yolov3 import YOLOv3, decode, compute_loss
-from core.config import cfg
 
 
 # Read training and validation sets
@@ -67,64 +65,99 @@ optimizer = tf.keras.optimizers.Adam(learning_rate=starting_lr)
 
 # Main training function
 def train_step(image_data, target):
-    with tf.GradientTape() as tape:
 
-        # Predict result
-        pred_result = model(image_data, training=True)
-        giou_loss=conf_loss=prob_loss=0
+    if not cfg.TRAIN.BATCH_ONE_BY_ONE:
+        with tf.GradientTape() as tape:
+            # Predict result
+            pred_result = model(image_data, training=True)
+            giou_loss = conf_loss = prob_loss = 0
+            # Compute losses
+            for i in range(3):
+                conv, pred = pred_result[i*2], pred_result[i*2+1]
+                loss_items = compute_loss(pred, conv, *target[i], i)
+                giou_loss += loss_items[0]
+                conf_loss += loss_items[1]
+                prob_loss += loss_items[2]
+            total_loss = giou_loss + conf_loss + prob_loss
+            # Compute gradient
+            gradients = tape.gradient(total_loss, model.trainable_variables)
+            optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+    else:
+        grads = []
+        for ix in range(cfg.TRAIN.BATCH_SIZE):
+            with tf.GradientTape() as tape:
+                giou_loss = conf_loss = prob_loss = 0
+                print(ix)
+                # Predict result
+                pred_result = model(
+                    tf.convert_to_tensor(image_data[[ix], ...]),
+                    # training=True, # probably important to keep in mind!
+                    training=False,
+                )
+                # Compute losses
+                for i in range(3):
+                    conv, pred = pred_result[i*2], pred_result[i*2+1]
+                    tgt = (target[i][0][[ix], ...], target[i][1][[ix], ...])
+                    loss_items = compute_loss(pred, conv, *tgt, i)
+                    giou_loss += loss_items[0] / cfg.TRAIN.BATCH_SIZE
+                    conf_loss += loss_items[1] / cfg.TRAIN.BATCH_SIZE
+                    prob_loss += loss_items[2] / cfg.TRAIN.BATCH_SIZE
+                total_loss = giou_loss + conf_loss + prob_loss
+                # Compute gradient (individuals, then sum all)
+                grads.append(tape.gradient(total_loss, model.trainable_variables))
+                # Alternative gradient computing (cumulative sum during the loop)
+                # if ix == 0:
+                #     gradients = tape.gradient(total_loss, model.trainable_variables)
+                # else:
+                #     tmp_grad = tape.gradient(total_loss, model.trainable_variables)
+                #     gradients = [
+                #         tf.add(gradients[i], tmp_grad[i]) for i in range(len(gradients))
+                #     ]
+        # Sum gradients
+        gradients = [tf.add_n([g[i] for g in grads]) for i in range(len(grads[0]))]
 
-        # Compute losses
-        for i in range(3):
-            conv, pred = pred_result[i*2], pred_result[i*2+1]
-            loss_items = compute_loss(pred, conv, *target[i], i)
-            giou_loss += loss_items[0]
-            conf_loss += loss_items[1]
-            prob_loss += loss_items[2]
-        total_loss = giou_loss + conf_loss + prob_loss
+    # Apply gradient
+    optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
-        # Apply gradient
-        gradients = tape.gradient(total_loss, model.trainable_variables)
-        optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+    # Print progress on screen (optional) and in a log file
+    if cfg.TRAIN.VERBOSE:
+        n_epoch = global_steps // steps_per_epoch
+        tf.print("=> EPOCH/STEP : %d/%s" % (n_epoch, global_steps.numpy()))
+        tf.print("   * learning rate = %e" % optimizer.lr.numpy())
+        tf.print("   * giou_loss = %e" % giou_loss)
+        tf.print("   * conf_loss = %e" % conf_loss)
+        tf.print("   * prob_loss = %e" % prob_loss)
+        tf.print("   * total_loss = %e" % total_loss)
+    tf.print(
+        "%d  %e  %e  %e  %e  %e" % (
+            global_steps,
+            optimizer.lr.numpy(),
+            giou_loss, conf_loss,
+            prob_loss, total_loss,
+        ),
+        output_stream='file:///home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/%s/log_train.txt' % cfg.YOLO.ROOT,
+    )
 
-        # Print progress on screen (optional) and in a log file
-        if cfg.TRAIN.VERBOSE:
-            n_epoch = global_steps // steps_per_epoch
-            tf.print("=> EPOCH/STEP : %d/%s" % (n_epoch, global_steps.numpy()))
-            tf.print("   * learning rate = %e" % optimizer.lr.numpy())
-            tf.print("   * giou_loss = %e" % giou_loss)
-            tf.print("   * conf_loss = %e" % conf_loss)
-            tf.print("   * prob_loss = %e" % prob_loss)
-            tf.print("   * total_loss = %e" % total_loss)
-        tf.print(
-            "%d  %e  %e  %e  %e  %e" % (
-                global_steps,
-                optimizer.lr.numpy(),
-                giou_loss, conf_loss,
-                prob_loss, total_loss,
-            ),
-            output_stream='file:///home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/%s/log_train.txt' % cfg.YOLO.ROOT,
+    # Update learning rate
+    global_steps.assign_add(1)
+    if global_steps < warmup_steps:
+        lr = global_steps / warmup_steps * cfg.TRAIN.LR_INIT
+    elif global_steps < total_steps:
+        lr = cfg.TRAIN.LR_END + 0.5 * (cfg.TRAIN.LR_INIT - cfg.TRAIN.LR_END) * (
+            (1 + tf.cos((global_steps - warmup_steps) / (total_steps - warmup_steps) * np.pi))
         )
+    else:
+        lr = global_steps / global_steps * cfg.TRAIN.LR_END
+    optimizer.lr.assign(lr.numpy())
 
-        # Update learning rate
-        global_steps.assign_add(1)
-        if global_steps < warmup_steps:
-            lr = global_steps / warmup_steps * cfg.TRAIN.LR_INIT
-        elif global_steps < total_steps:
-            lr = cfg.TRAIN.LR_END + 0.5 * (cfg.TRAIN.LR_INIT - cfg.TRAIN.LR_END) * (
-                (1 + tf.cos((global_steps - warmup_steps) / (total_steps - warmup_steps) * np.pi))
-            )
-        else:
-            lr = global_steps / global_steps * cfg.TRAIN.LR_END
-        optimizer.lr.assign(lr.numpy())
-
-        # Writing summary data in TF log folder (for tensorboard)
-        with writer.as_default():
-            tf.summary.scalar("lr", optimizer.lr, step=global_steps)
-            tf.summary.scalar("loss/total_loss", total_loss, step=global_steps)
-            tf.summary.scalar("loss/giou_loss", giou_loss, step=global_steps)
-            tf.summary.scalar("loss/conf_loss", conf_loss, step=global_steps)
-            tf.summary.scalar("loss/prob_loss", prob_loss, step=global_steps)
-        writer.flush()
+    # Writing summary data in TF log folder (for tensorboard)
+    with writer.as_default():
+        tf.summary.scalar("lr", optimizer.lr, step=global_steps)
+        tf.summary.scalar("loss/total_loss", total_loss, step=global_steps)
+        tf.summary.scalar("loss/giou_loss", giou_loss, step=global_steps)
+        tf.summary.scalar("loss/conf_loss", conf_loss, step=global_steps)
+        tf.summary.scalar("loss/prob_loss", prob_loss, step=global_steps)
+    writer.flush()
 
 # Create TF log directory for validation
 if os.path.exists(logdir + '_valid'):
