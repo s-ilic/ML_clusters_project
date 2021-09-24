@@ -15,10 +15,14 @@ __C.YOLO                      = edict()
 # __C.YOLO.ROOT = "2048x2048_ds2_0p396_pad50"
 # __C.YOLO.ROOT = "2048x2048_ds4_0p396_pad50"
 # __C.YOLO.ROOT = "2048x2048_ds4_0p396_pad50_zcut0p3"
-__C.YOLO.ROOT = "test"
+# __C.YOLO.ROOT = "test2"
+# __C.YOLO.ROOT = "2048x2048_ds4_0p396_pad50_zbins_ovl"
+# __C.YOLO.ROOT = "2016x2016_ds1_0p396_nopad"
 
 ### File containing the YOLO classes names
 __C.YOLO.CLASSES              = "./runs/clusters.names"
+# __C.YOLO.CLASSES              = "./runs/clusters_zbins.names"
+# __C.YOLO.CLASSES              = "./runs/clusters_zbins_ovl.names"
 
 ### File containing the YOLO baseline anchors
 ### NOTES: After doing some clustering studies on ground truth labels, it turns out
@@ -27,6 +31,8 @@ __C.YOLO.CLASSES              = "./runs/clusters.names"
 ### set of boxes with particular height-width ratios - those predetermined set of
 ### boxes are the anchor boxes.
 __C.YOLO.ANCHORS              = "./runs/baseline_anchors.txt"
+# __C.YOLO.ANCHORS              = "./runs/clusters_anchors_1024.txt"
+# __C.YOLO.ANCHORS              = "./runs/clusters_anchors_512.txt"
 
 ### List of strides == integer factors by which the input images are reduced
 ### within the YOLO network when performing the multiscale detection
@@ -54,30 +60,44 @@ __C.YOLO.IOU_LOSS_THRESH      = 0.5
 
 __C.TRAIN                     = edict()
 
-### Verbose mode (print losses during training)
+### Verbose mode (print losses in terminal during training)
 __C.TRAIN.VERBOSE             = True
+
+### Create Tensorboard log files during training
+__C.TRAIN.DO_TBOARD           = False
 
 ### Path to text file "pointing" to the training set of images; each line of the file
 ### should contain the full path to an image, followed by the list of bounding boxes
 ### (+ class number) for all objects in said image
 __C.TRAIN.ANNOT_PATH          = "./runs/%s/train.txt" % __C.YOLO.ROOT
+# __C.TRAIN.ANNOT_PATH          = "./runs/%s/train_crop.txt" % __C.YOLO.ROOT
 
 # Number of training epochs
-__C.TRAIN.EPOCHS              = 30
+__C.TRAIN.EPOCHS              = 1000
 
 ### How many training images per batch (careful, can saturate GPU memory quickly)
-__C.TRAIN.BATCH_SIZE          = 8
+__C.TRAIN.BATCH_SIZE          = 32
+# __C.TRAIN.BATCH_SIZE          = 16
+# __C.TRAIN.BATCH_SIZE          = 8
 # __C.TRAIN.BATCH_SIZE          = 4
 # __C.TRAIN.BATCH_SIZE          = 2
+# __C.TRAIN.BATCH_SIZE          = 1
+
+### Alternative method of mini-batch to accomodate large images
+__C.TRAIN.BATCH_ONE_BY_ONE    = True
+# __C.TRAIN.BATCH_ONE_BY_ONE    = False
 
 ### List of image sizes which the program randomly picks at training time, and into
 ### which the input images are converted into
 # __C.TRAIN.INPUT_SIZE          = [320, 352, 384, 416, 448, 480, 512, 544, 576, 608]
-__C.TRAIN.INPUT_SIZE          = [512]
+# __C.TRAIN.INPUT_SIZE          = [512]
+# __C.TRAIN.INPUT_SIZE          = [1024]
+__C.TRAIN.INPUT_SIZE          = [2048]
 
 ### Choose whether to perform data augmentation (namely, horizontal flip, crop, and
 ### translation) on training images
-__C.TRAIN.DATA_AUG            = True # data augmentation shift + rotation + flip ?
+__C.TRAIN.DATA_AUG            = True
+# __C.TRAIN.DATA_AUG            = False
 
 ### Initial and final learning rate, and number of "warmup epochs"
 ### During the warmup, the learning rate "lr" evolves as:
@@ -102,8 +122,10 @@ __C.TEST                      = edict()
 
 ### Same definitions as for TRAIN variables, but for test images
 __C.TEST.ANNOT_PATH           = "./runs/%s/valid.txt" % __C.YOLO.ROOT
-__C.TEST.BATCH_SIZE           = 1
-__C.TEST.INPUT_SIZE           = 512
+__C.TEST.BATCH_SIZE           = 1 # always keep it like this
+# __C.TEST.INPUT_SIZE           = 512
+# __C.TEST.INPUT_SIZE           = 1024
+__C.TEST.INPUT_SIZE           = 2048
 __C.TEST.DATA_AUG             = False
 
 ### Discard predicted boxes whose score is below this threshold
@@ -132,7 +154,7 @@ __C.TEST.IOU_THRESHOLD        = 0.45
 __C.RESUME                    = edict()
 
 ### Resume training from a previous run (don't touch previous settings, they are needed)
-__C.RESUME.DO_RESUME          = True
+__C.RESUME.DO_RESUME          = False
 
 ### End of which previous epoch to use as starting point (0-indexed)
 __C.RESUME.FROM_EPOCH         = 29

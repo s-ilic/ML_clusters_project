@@ -14,7 +14,6 @@ trainset = Dataset('train')
 validset = Dataset('valid')
 
 # Set up some variables
-logdir = "./runs/%s/log" % cfg.YOLO.ROOT
 steps_per_epoch = len(trainset)
 global_steps = tf.Variable(1, trainable=False, dtype=tf.int64)
 warmup_steps = cfg.TRAIN.WARMUP_EPOCHS * steps_per_epoch
@@ -33,9 +32,11 @@ for i, conv_tensor in enumerate(conv_tensors):
 model = tf.keras.Model(input_tensor, output_tensors)
 
 # Create TF log directory (for tensorboard), cleans it beforehand if already exists
-if os.path.exists(logdir):
-    shutil.rmtree(logdir)
-writer = tf.summary.create_file_writer(logdir)
+if cfg.TRAIN.DO_TBOARD:
+    logdir = "./runs/%s/log" % cfg.YOLO.ROOT
+    if os.path.exists(logdir):
+        shutil.rmtree(logdir)
+    writer = tf.summary.create_file_writer(logdir)
 
 # Create copy of config file for safe keeping
 out_cfgfile = open("./runs/%s/input_cfg.txt" % cfg.YOLO.ROOT, "w")
@@ -151,48 +152,50 @@ def train_step(image_data, target):
     optimizer.lr.assign(lr.numpy())
 
     # Writing summary data in TF log folder (for tensorboard)
-    with writer.as_default():
-        tf.summary.scalar("lr", optimizer.lr, step=global_steps)
-        tf.summary.scalar("loss/total_loss", total_loss, step=global_steps)
-        tf.summary.scalar("loss/giou_loss", giou_loss, step=global_steps)
-        tf.summary.scalar("loss/conf_loss", conf_loss, step=global_steps)
-        tf.summary.scalar("loss/prob_loss", prob_loss, step=global_steps)
-    writer.flush()
+    if cfg.TRAIN.DO_TBOARD:
+        with writer.as_default():
+            tf.summary.scalar("lr", optimizer.lr, step=global_steps)
+            tf.summary.scalar("loss/total_loss", total_loss, step=global_steps)
+            tf.summary.scalar("loss/giou_loss", giou_loss, step=global_steps)
+            tf.summary.scalar("loss/conf_loss", conf_loss, step=global_steps)
+            tf.summary.scalar("loss/prob_loss", prob_loss, step=global_steps)
+        writer.flush()
 
 # Create TF log directory for validation
-if os.path.exists(logdir + '_valid'):
-    shutil.rmtree(logdir + '_valid')
-validate_writer = tf.summary.create_file_writer(logdir + '_valid')
+if cfg.TRAIN.DO_TBOARD:
+    if os.path.exists(logdir + '_valid'):
+        shutil.rmtree(logdir + '_valid')
+    validate_writer = tf.summary.create_file_writer(logdir + '_valid')
 
 # Main validation function
 def validate_step(image_data, target):
-    with tf.GradientTape() as tape:
 
-        # Predict result
-        pred_result = model(image_data, training=False)
-        giou_loss=conf_loss=prob_loss=0
+    # Predict result
+    pred_result = model(image_data, training=False)
+    giou_loss = conf_loss = prob_loss = 0
 
-        # Compute losses
-        for i in range(3):
-            conv, pred = pred_result[i*2], pred_result[i*2+1]
-            loss_items = compute_loss(pred, conv, *target[i], i)
-            giou_loss += loss_items[0]
-            conf_loss += loss_items[1]
-            prob_loss += loss_items[2]
-        total_loss = giou_loss + conf_loss + prob_loss
+    # Compute losses
+    for i in range(3):
+        conv, pred = pred_result[i*2], pred_result[i*2+1]
+        loss_items = compute_loss(pred, conv, *target[i], i)
+        giou_loss += loss_items[0]
+        conf_loss += loss_items[1]
+        prob_loss += loss_items[2]
+    total_loss = giou_loss + conf_loss + prob_loss
 
-        # Print progress on screen (optional) and in a log file
-        tf.print(
-            "%d  %e  %e  %e  %e  %e" % (
-                global_steps,
-                optimizer.lr.numpy(),
-                giou_loss, conf_loss,
-                prob_loss, total_loss,
-            ),
-            output_stream='file:///home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/%s/log_valid.txt' % cfg.YOLO.ROOT,
-        )
+    # Print validation results in a log file
+    tf.print(
+        "%d  %e  %e  %e  %e  %e" % (
+            global_steps,
+            optimizer.lr.numpy(),
+            giou_loss, conf_loss,
+            prob_loss, total_loss,
+        ),
+        output_stream='file:///home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/%s/log_valid.txt' % cfg.YOLO.ROOT,
+    )
 
-        # Writing summary data in TF log folder (for tensorboard)
+    # Writing summary data in TF log folder (for tensorboard)
+    if cfg.TRAIN.DO_TBOARD:
         with validate_writer.as_default():
             tf.summary.scalar("lr", optimizer.lr, step=global_steps)
             tf.summary.scalar("validate_loss/total_loss", total_loss, step=global_steps)
@@ -200,7 +203,8 @@ def validate_step(image_data, target):
             tf.summary.scalar("validate_loss/conf_loss", conf_loss, step=global_steps)
             tf.summary.scalar("validate_loss/prob_loss", prob_loss, step=global_steps)
         validate_writer.flush()
-        return total_loss
+
+    return total_loss
 
 
 # Main loop
