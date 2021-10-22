@@ -27,3 +27,5 @@ classic_NN/*.png
 classic_NN/*.pdf
 classic_NN/*.h5
 classic_NN/*.log
+**/*.pyc
+
