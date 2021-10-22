@@ -23,7 +23,7 @@ from core.config import cfg
 
 class Dataset(object):
     """implement Dataset here"""
-    def __init__(self, dataset_type):
+    def __init__(self, dataset_type, batch_count=None, ann_index=None):
         self.annot_path  = cfg.TRAIN.ANNOT_PATH if dataset_type == 'train' else cfg.TEST.ANNOT_PATH
         self.input_sizes = cfg.TRAIN.INPUT_SIZE if dataset_type == 'train' else cfg.TEST.INPUT_SIZE
         self.batch_size  = cfg.TRAIN.BATCH_SIZE if dataset_type == 'train' else cfg.TEST.BATCH_SIZE
@@ -40,14 +40,14 @@ class Dataset(object):
         self.annotations = self.load_annotations(dataset_type)
         self.num_samples = len(self.annotations)
         self.num_batchs = int(np.ceil(self.num_samples / self.batch_size))
-        self.batch_count = 0
-
+        self.batch_count = 0 if batch_count is None else batch_count
+        self.ann_index = np.argsort(np.random.rand(self.num_samples)) if ann_index is None else ann_index
+        self.annotations = [self.annotations[i] for i in self.ann_index]
 
     def load_annotations(self, dataset_type):
         with open(self.annot_path, 'r') as f:
             txt = f.readlines()
             annotations = [line.strip() for line in txt if len(line.strip().split()[1:]) != 0]
-        np.random.shuffle(annotations)
         return annotations
 
     def __iter__(self):
@@ -97,7 +97,8 @@ class Dataset(object):
                 return batch_image, (batch_smaller_target, batch_medium_target, batch_larger_target)
             else:
                 self.batch_count = 0
-                np.random.shuffle(self.annotations)
+                self.ann_index = np.argsort(np.random.rand(self.num_samples))
+                self.annotations = [self.annotations[i] for i in self.ann_index]
                 raise StopIteration
 
     def random_horizontal_flip(self, image, bboxes):
