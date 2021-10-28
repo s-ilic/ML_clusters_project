@@ -1,16 +1,19 @@
-import os
+import os, sys
 import json
 import shutil
 import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
-from core.config import cfg
 from core.dataset import Dataset
 from core.yolov3 import YOLOv3, decode, compute_loss
 
 
-# with open("mem_usage.txt", "w") as f:
-#     f.write("%s \n" % tf.config.experimental.get_memory_info('GPU:0')['current'])
+# Read config file
+if len(sys.argv) != 2:
+    raise SyntaxError("Wrong number of arguments.")
+else:
+    config_fname = sys.argv[1].strip('.py')
+    exec(f"from core.{config_fname} import cfg")
 
 # Read training and validation sets
 trainset = Dataset('train')
@@ -23,7 +26,7 @@ warmup_steps = cfg.TRAIN.WARMUP_EPOCHS * steps_per_epoch
 total_steps = cfg.TRAIN.EPOCHS * steps_per_epoch
 
 # Define input/output tensors for model creation
-input_tensor = tf.keras.layers.Input([cfg.TRAIN.INPUT_SIZE[0],cfg.TRAIN.INPUT_SIZE[0],3])
+input_tensor = tf.keras.layers.Input([cfg.YOLO.SIZE, cfg.YOLO.SIZE, 3])
 conv_tensors = YOLOv3(input_tensor)
 output_tensors = []
 for i, conv_tensor in enumerate(conv_tensors):
@@ -36,13 +39,13 @@ model = tf.keras.Model(input_tensor, output_tensors)
 
 # Create TF log directory (for tensorboard), cleans it beforehand if already exists
 if cfg.TRAIN.DO_TBOARD:
-    logdir = "./runs/%s/log" % cfg.YOLO.ROOT
+    logdir = f"./runs/{cfg.YOLO.ROOT}/log"
     if os.path.exists(logdir):
         shutil.rmtree(logdir)
     writer = tf.summary.create_file_writer(logdir)
 
 # Create copy of config file for safe keeping
-out_cfgfile = open("./runs/%s/input_cfg.txt" % cfg.YOLO.ROOT, "w")
+out_cfgfile = open(f"./runs/{cfg.YOLO.ROOT}/input_cfg.txt", "w")
 json.dump(cfg, out_cfgfile, indent = 4)
 out_cfgfile.close()
 
@@ -51,7 +54,7 @@ out_cfgfile.close()
 #   2) adjust global_steps counter
 #   3) adjust starting value of learning rate where it left off
 if cfg.RESUME.DO_RESUME:
-    model.load_weights("./runs/%s/yolov3_epoch%s" % (cfg.YOLO.ROOT, cfg.RESUME.FROM_EPOCH))
+    model.load_weights(f"./runs/{cfg.YOLO.ROOT}/yolov3_epoch{cfg.RESUME.FROM_EPOCH}")
     global_steps.assign_add((cfg.RESUME.FROM_EPOCH + 1) * steps_per_epoch)
     if global_steps < warmup_steps:
         starting_lr = global_steps.numpy() / warmup_steps * cfg.TRAIN.LR_INIT
@@ -166,9 +169,9 @@ def train_step(image_data, target):
 
 # Create TF log directory for validation
 if cfg.TRAIN.DO_TBOARD:
-    if os.path.exists(logdir + '_valid'):
-        shutil.rmtree(logdir + '_valid')
-    validate_writer = tf.summary.create_file_writer(logdir + '_valid')
+    if os.path.exists(f'{logdir}_valid'):
+        shutil.rmtree(f'{logdir}_valid')
+    validate_writer = tf.summary.create_file_writer(f'{logdir}_valid')
 
 # Main validation function
 def validate_step(image_data, target):
@@ -215,7 +218,7 @@ n_epochs = cfg.RESUME.EPOCHS if cfg.RESUME.DO_RESUME else cfg.TRAIN.EPOCHS
 n_ini_epoch = (cfg.RESUME.FROM_EPOCH + 1) if cfg.RESUME.DO_RESUME else 0
 for i in range(n_epochs):
     # Print progress
-    print("Epoch %s out of %s" % (i + 1, n_epochs))
+    print(f"Epoch {i+1} out of {n_epochs}")
     # Training
     for image_data, target in tqdm(trainset, smoothing=1):
         train_step(image_data, target)
@@ -223,4 +226,4 @@ for i in range(n_epochs):
     for image_data, target in tqdm(validset, smoothing=1):
         valid_loss = validate_step(image_data, target)
     # Save weights
-    model.save_weights("./runs/%s/yolov3_epoch%s" % (cfg.YOLO.ROOT, n_ini_epoch + i))
+    model.save_weights(f"./runs/{cfg.YOLO.ROOT}/yolov3_epoch{n_ini_epoch+i}")

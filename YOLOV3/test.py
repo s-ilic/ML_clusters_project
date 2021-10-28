@@ -1,21 +1,25 @@
-import sys
+import os, sys
 import cv2
-import os
 import shutil
 import numpy as np
 import tensorflow as tf
 import core.utils as utils
-from core.config import cfg
 from core.yolov3 import YOLOv3, decode
 
-#################################
-# Image settings
-ix_start = 0           # which test image to start from (0 = from beginning)
-ntl = int(sys.argv[1]) # which save file to load
-reso = 0.396127        # arcsec/pix
-pix_size = 1024        # image half side size in pixels
-pad_size = 50          # padding size in pixels
-#################################
+
+# Read config file
+if len(sys.argv) != 2:
+    raise SyntaxError("Wrong number of arguments.")
+else:
+    config_fname = sys.argv[1].strip('.py')
+    exec(f"from core.{config_fname} import cfg")
+
+# Settings
+ix_start = cfg.TEST.IX_START
+wfn = cfg.TEST.WEIGHTS_FNAME.split("/")[-1].split()
+reso = cfg.TEST.RESO
+pix_size = cfg.TEST.PIX_SIZE
+pad_size = cfg.TEST.PAD_SIZE
 
 # Prep for real images/galaxies
 from astropy.io import fits
@@ -38,10 +42,11 @@ NUM_CLASS    = len(utils.read_class_names(cfg.YOLO.CLASSES))
 CLASSES      = utils.read_class_names(cfg.YOLO.CLASSES)
 
 # Set up some paths
-mAP_dir_path = './runs/%s/mAP_%s_%s' % (cfg.YOLO.ROOT, ntl, cfg.TEST.IOU_METHOD)
-predicted_dir_path = './runs/%s/mAP_%s_%s/predicted' % (cfg.YOLO.ROOT, ntl, cfg.TEST.IOU_METHOD)
-ground_truth_dir_path = './runs/%s/mAP_%s_%s/ground-truth' % (cfg.YOLO.ROOT, ntl, cfg.TEST.IOU_METHOD)
-detected_image_path = './runs/%s/detect_%s_%s' % (cfg.YOLO.ROOT, ntl, cfg.TEST.IOU_METHOD)
+suffix = 'SZ'
+mAP_dir_path = f'./runs/{cfg.YOLO.ROOT}/mAP_{wfn}_{cfg.TEST.IOU_METHOD}_{suffix}'
+predicted_dir_path = f'./runs/{cfg.YOLO.ROOT}/mAP_{wfn}_{cfg.TEST.IOU_METHOD}_{suffix}/predicted'
+ground_truth_dir_path = f'./runs/{cfg.YOLO.ROOT}/mAP_{wfn}_{cfg.TEST.IOU_METHOD}_{suffix}/ground-truth'
+detected_image_path = f'./runs/{cfg.YOLO.ROOT}/detect_{wfn}_{cfg.TEST.IOU_METHOD}_{suffix}'
 
 # Clean output folders if needed
 if ix_start == 0:
@@ -66,11 +71,10 @@ for i, fm in enumerate(feature_maps):
     bbox_tensor = decode(fm, i)
     bbox_tensors.append(bbox_tensor)
 model = tf.keras.Model(input_layer, bbox_tensors)
-model.load_weights("./runs/%s/yolov3_epoch%s" % (cfg.YOLO.ROOT, ntl)) #loads the wights from the training
+model.load_weights(cfg.TEST.WEIGHTS_FNAME) #loads the weights from the training
 
 # Main loop ~: for each image, runs the network and traces boxes
-# with open("./runs/%s/valid.txt" % cfg.YOLO.ROOT, 'r') as annotation_file:
-with open("./runs/%s/train.txt" % cfg.YOLO.ROOT, 'r') as annotation_file:
+with open(cfg.TEST.ANNOT_PATH, 'r') as annotation_file:
     for num, line in enumerate(annotation_file):
         if num >= ix_start:
             annotation = line.strip().split()
@@ -114,6 +118,7 @@ with open("./runs/%s/train.txt" % cfg.YOLO.ROOT, 'r') as annotation_file:
                 sigma=cfg.TEST.SIGMA,
             )
 
+            '''
             # Draw boxes and galaxies in image
             if detected_image_path is not None:
                 # Draw truth
@@ -145,6 +150,11 @@ with open("./runs/%s/train.txt" % cfg.YOLO.ROOT, 'r') as annotation_file:
                     image = cv2.circle(image, (x,y), 5, (0,0,255),3)
                 # Save image
                 cv2.imwrite(detected_image_path+'/'+image_name, image)
+            '''
+
+            image = utils.draw_bbox(image, bboxes)
+            cv2.imwrite(detected_image_path+'/'+image_name, image)
+
 
             # Output prediction results
             with open(predict_result_path, 'w') as f:
