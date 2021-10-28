@@ -12,12 +12,15 @@ cfg                           = __C
 __C.YOLO                      = edict()
 
 ### Choose name of output folder (code will create it in "./runs")
-# __C.YOLO.ROOT = "2048x2048_ds2_0p396_pad50"
+__C.YOLO.ROOT = "2048x2048_ds2_0p396_pad50"
 # __C.YOLO.ROOT = "2048x2048_ds4_0p396_pad50"
 # __C.YOLO.ROOT = "2048x2048_ds4_0p396_pad50_zcut0p3"
 # __C.YOLO.ROOT = "test2"
 # __C.YOLO.ROOT = "2048x2048_ds4_0p396_pad50_zbins_ovl"
 # __C.YOLO.ROOT = "2016x2016_ds1_0p396_nopad"
+# __C.YOLO.ROOT = "2048x0p396_ds1_mb32_nopad_A"
+# __C.YOLO.ROOT = "2048x0p396_ds1_mb32_nopad_B"
+# __C.YOLO.ROOT = "2048x0p792_ds1_mb32_nopad_A"
 
 ### File containing the YOLO classes names
 __C.YOLO.CLASSES              = "./runs/clusters.names"
@@ -31,6 +34,7 @@ __C.YOLO.CLASSES              = "./runs/clusters.names"
 ### set of boxes with particular height-width ratios - those predetermined set of
 ### boxes are the anchor boxes.
 __C.YOLO.ANCHORS              = "./runs/baseline_anchors.txt"
+# __C.YOLO.ANCHORS              = "./runs/clusters_anchors_2048_A.txt"
 # __C.YOLO.ANCHORS              = "./runs/clusters_anchors_1024.txt"
 # __C.YOLO.ANCHORS              = "./runs/clusters_anchors_512.txt"
 
@@ -73,26 +77,26 @@ __C.TRAIN.ANNOT_PATH          = "./runs/%s/train.txt" % __C.YOLO.ROOT
 # __C.TRAIN.ANNOT_PATH          = "./runs/%s/train_crop.txt" % __C.YOLO.ROOT
 
 # Number of training epochs
-__C.TRAIN.EPOCHS              = 1000
+__C.TRAIN.EPOCHS              = 60
 
 ### How many training images per batch (careful, can saturate GPU memory quickly)
-__C.TRAIN.BATCH_SIZE          = 32
+# __C.TRAIN.BATCH_SIZE          = 32
 # __C.TRAIN.BATCH_SIZE          = 16
 # __C.TRAIN.BATCH_SIZE          = 8
 # __C.TRAIN.BATCH_SIZE          = 4
 # __C.TRAIN.BATCH_SIZE          = 2
-# __C.TRAIN.BATCH_SIZE          = 1
+__C.TRAIN.BATCH_SIZE          = 1
 
 ### Alternative method of mini-batch to accomodate large images
-__C.TRAIN.BATCH_ONE_BY_ONE    = True
-# __C.TRAIN.BATCH_ONE_BY_ONE    = False
+# __C.TRAIN.BATCH_ONE_BY_ONE    = True
+__C.TRAIN.BATCH_ONE_BY_ONE    = False
 
 ### List of image sizes which the program randomly picks at training time, and into
 ### which the input images are converted into
 # __C.TRAIN.INPUT_SIZE          = [320, 352, 384, 416, 448, 480, 512, 544, 576, 608]
 # __C.TRAIN.INPUT_SIZE          = [512]
-# __C.TRAIN.INPUT_SIZE          = [1024]
-__C.TRAIN.INPUT_SIZE          = [2048]
+__C.TRAIN.INPUT_SIZE          = [1024]
+# __C.TRAIN.INPUT_SIZE          = [2048]
 
 ### Choose whether to perform data augmentation (namely, horizontal flip, crop, and
 ### translation) on training images
@@ -100,9 +104,9 @@ __C.TRAIN.DATA_AUG            = True
 # __C.TRAIN.DATA_AUG            = False
 
 ### Initial and final learning rate, and number of "warmup epochs"
-### During the warmup, the learning rate "lr" evolves as:
+### During the warmup, the learning rate "lr" goes up as:
 ###    lr = X / WARMUP_EPOCHS * LR_INIT
-### and afterwards as:
+### and afterwards descends as:
 ###    lr = LR_END + 0.5 * (LR_INIT - LR_END) *
 ####      [1 + cos(pi * (X - WARMUP_EPOCHS)/(EPOCHS - WARMUP_EPOCHS))]
 #### where X = current_step / steps_per_epoch
@@ -112,6 +116,7 @@ __C.TRAIN.LR_INIT             = 1e-4  # intial learning rate
 __C.TRAIN.LR_END              = 1e-6 # final learning rate
 # __C.TRAIN.WARMUP_EPOCHS       = 2
 __C.TRAIN.WARMUP_EPOCHS       = 4
+# __C.TRAIN.WARMUP_EPOCHS       = 8
 
 
 ####################
@@ -124,8 +129,8 @@ __C.TEST                      = edict()
 __C.TEST.ANNOT_PATH           = "./runs/%s/valid.txt" % __C.YOLO.ROOT
 __C.TEST.BATCH_SIZE           = 1 # always keep it like this
 # __C.TEST.INPUT_SIZE           = 512
-# __C.TEST.INPUT_SIZE           = 1024
-__C.TEST.INPUT_SIZE           = 2048
+__C.TEST.INPUT_SIZE           = 1024
+# __C.TEST.INPUT_SIZE           = 2048
 __C.TEST.DATA_AUG             = False
 
 ### Discard predicted boxes whose score is below this threshold

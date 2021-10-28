@@ -194,8 +194,3 @@ def compute_loss(pred, conv, label, bboxes, i=0):
     prob_loss = tf.reduce_mean(tf.reduce_sum(prob_loss, axis=[1,2,3,4]))
 
     return giou_loss, conf_loss, prob_loss
-
-
-
-
-

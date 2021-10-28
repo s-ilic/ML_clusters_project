@@ -9,6 +9,9 @@ from core.dataset import Dataset
 from core.yolov3 import YOLOv3, decode, compute_loss
 
 
+# with open("mem_usage.txt", "w") as f:
+#     f.write("%s \n" % tf.config.experimental.get_memory_info('GPU:0')['current'])
+
 # Read training and validation sets
 trainset = Dataset('train')
 validset = Dataset('valid')
