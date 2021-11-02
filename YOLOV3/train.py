@@ -9,11 +9,12 @@ from core.yolov3 import YOLOv3, decode, compute_loss
 
 
 # Read config file
-if len(sys.argv) != 2:
-    raise SyntaxError("Wrong number of arguments.")
-else:
-    config_fname = sys.argv[1].strip('.py')
-    exec(f"from core.{config_fname} import cfg")
+# if len(sys.argv) != 2:
+#     raise SyntaxError("Wrong number of arguments.")
+# else:
+#     config_fname = sys.argv[1].strip('.py')
+#     exec(f"from core.{config_fname} import cfg")
+from core.config import cfg
 
 # Read training and validation sets
 trainset = Dataset('train')
