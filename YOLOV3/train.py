@@ -143,7 +143,7 @@ def train_step(image_data, target):
             giou_loss, conf_loss,
             prob_loss, total_loss,
         ),
-        output_stream='file:///home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/%s/log_train.txt' % cfg.YOLO.ROOT,
+        output_stream='file://' + os.getcwd() + f'/runs/{cfg.YOLO.ROOT}/log_train.txt',
     )
 
     # Update learning rate
@@ -198,7 +198,7 @@ def validate_step(image_data, target):
             giou_loss, conf_loss,
             prob_loss, total_loss,
         ),
-        output_stream='file:///home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/%s/log_valid.txt' % cfg.YOLO.ROOT,
+        output_stream='file://' + os.getcwd() + f'/runs/{cfg.YOLO.ROOT}/log_valid.txt',
     )
 
     # Writing summary data in TF log folder (for tensorboard)
