@@ -17,7 +17,6 @@ from core.config import cfg
 
 # Settings
 ix_start = cfg.TEST.IX_START
-wfn = cfg.TEST.WEIGHTS_FNAME.split("/")[-1].split()
 reso = cfg.TEST.RESO
 pix_size = cfg.TEST.PIX_SIZE
 pad_size = cfg.TEST.PAD_SIZE
@@ -38,16 +37,15 @@ mem_full_data = hdul2[1].data
 n_clu = len(clu_full_data)
 
 # Set up some variables
-INPUT_SIZE   = cfg.TRAIN.INPUT_SIZE[0]
+INPUT_SIZE   = cfg.YOLO.SIZE
 NUM_CLASS    = len(utils.read_class_names(cfg.YOLO.CLASSES))
 CLASSES      = utils.read_class_names(cfg.YOLO.CLASSES)
 
 # Set up some paths
-suffix = 'SZ'
-mAP_dir_path = f'./runs/{cfg.YOLO.ROOT}/mAP_{wfn}_{cfg.TEST.IOU_METHOD}_{suffix}'
-predicted_dir_path = f'./runs/{cfg.YOLO.ROOT}/mAP_{wfn}_{cfg.TEST.IOU_METHOD}_{suffix}/predicted'
-ground_truth_dir_path = f'./runs/{cfg.YOLO.ROOT}/mAP_{wfn}_{cfg.TEST.IOU_METHOD}_{suffix}/ground-truth'
-detected_image_path = f'./runs/{cfg.YOLO.ROOT}/detect_{wfn}_{cfg.TEST.IOU_METHOD}_{suffix}'
+mAP_dir_path = f'./runs/{cfg.YOLO.ROOT}/mAP_{cfg.TEST.OUTPUT_ROOT}'
+predicted_dir_path = f'./runs/{cfg.YOLO.ROOT}/mAP_{cfg.TEST.OUTPUT_ROOT}/predicted'
+ground_truth_dir_path = f'./runs/{cfg.YOLO.ROOT}/mAP_{cfg.TEST.OUTPUT_ROOT}/ground-truth'
+detected_image_path = f'./runs/{cfg.YOLO.ROOT}/detect_{cfg.TEST.OUTPUT_ROOT}'
 
 # Clean output folders if needed
 if ix_start == 0:
@@ -108,7 +106,8 @@ with open(cfg.TEST.ANNOT_PATH, 'r') as annotation_file:
             image_size = image.shape[:2]
             image_data = utils.image_preprocess(np.copy(image), [INPUT_SIZE, INPUT_SIZE])
             image_data = image_data[np.newaxis, ...].astype(np.float32)
-            pred_bbox = model.predict(image_data)
+            # pred_bbox = model.predict(image_data)
+            pred_bbox = model(image_data, training=False)
             pred_bbox = [tf.reshape(x, (-1, tf.shape(x)[-1])) for x in pred_bbox]
             pred_bbox = tf.concat(pred_bbox, axis=0)
             bboxes = utils.postprocess_boxes(pred_bbox, image_size, INPUT_SIZE, cfg.TEST.SCORE_THRESHOLD)
@@ -119,39 +118,37 @@ with open(cfg.TEST.ANNOT_PATH, 'r') as annotation_file:
                 sigma=cfg.TEST.SIGMA,
             )
 
-            '''
-            # Draw boxes and galaxies in image
-            if detected_image_path is not None:
-                # Draw truth
-                tmp_bboxes = []
-                for bb in bboxes_gt:
-                    tmp_bb = [1,1,1,1,1,1]
-                    tmp_bb[:4] = bb
-                    tmp_bboxes.append(tmp_bb)
-                image = utils.draw_bbox(image, tmp_bboxes, classes=['cluster','truth'])
-                image = utils.draw_bbox(image, bboxes)
-                # Draw member galaxies
-                clus_id = int(image_name.split('.')[0])
-                g1 = np.where(clu_full_data['ID'] == clus_id)[0]
-                g2 = np.where(mem_full_data['ID'] == clus_id)[0]
-                c = SkyCoord(
-                    ra=clu_full_data['RA'][g1]*u.degree,
-                    dec=clu_full_data['DEC'][g1]*u.degree,
-                    frame='icrs',
-                )
-                c2 = SkyCoord(
-                    ra=mem_full_data['RA'][g2]*u.degree,
-                    dec=mem_full_data['DEC'][g2]*u.degree,
-                    frame='icrs',
-                )
-                off = c.spherical_offsets_to(c2)
-                xs = np.round(pix_size - off[0].arcsec / reso * 1.01).astype('int')
-                ys = np.round(pix_size - off[1].arcsec / reso * 1.01).astype('int')
-                for x, y in zip(xs, ys):
-                    image = cv2.circle(image, (x,y), 5, (0,0,255),3)
-                # Save image
-                cv2.imwrite(detected_image_path+'/'+image_name, image)
-            '''
+            # # Draw boxes and galaxies in image
+            # if detected_image_path is not None:
+            #     # Draw truth
+            #     tmp_bboxes = []
+            #     for bb in bboxes_gt:
+            #         tmp_bb = [1,1,1,1,1,1]
+            #         tmp_bb[:4] = bb
+            #         tmp_bboxes.append(tmp_bb)
+            #     image = utils.draw_bbox(image, tmp_bboxes, classes=['cluster','truth'])
+            #     image = utils.draw_bbox(image, bboxes)
+            #     # Draw member galaxies
+            #     clus_id = int(image_name.split('.')[0])
+            #     g1 = np.where(clu_full_data['ID'] == clus_id)[0]
+            #     g2 = np.where(mem_full_data['ID'] == clus_id)[0]
+            #     c = SkyCoord(
+            #         ra=clu_full_data['RA'][g1]*u.degree,
+            #         dec=clu_full_data['DEC'][g1]*u.degree,
+            #         frame='icrs',
+            #     )
+            #     c2 = SkyCoord(
+            #         ra=mem_full_data['RA'][g2]*u.degree,
+            #         dec=mem_full_data['DEC'][g2]*u.degree,
+            #         frame='icrs',
+            #     )
+            #     off = c.spherical_offsets_to(c2)
+            #     xs = np.round(pix_size - off[0].arcsec / reso * 1.01).astype('int')
+            #     ys = np.round(pix_size - off[1].arcsec / reso * 1.01).astype('int')
+            #     for x, y in zip(xs, ys):
+            #         image = cv2.circle(image, (x,y), 5, (0,0,255),3)
+            #     # Save image
+            #     cv2.imwrite(detected_image_path+'/'+image_name, image)
 
             image = utils.draw_bbox(image, bboxes)
             cv2.imwrite(detected_image_path+'/'+image_name, image)
