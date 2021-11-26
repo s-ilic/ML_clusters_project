@@ -12,7 +12,7 @@ cfg                           = __C
 __C.YOLO                      = edict()
 
 ### Choose size of the YOLO network (first layer)
-__C.YOLO.SIZE = 512
+__C.YOLO.SIZE = 1024
 
 ### Choose name of output folder (code will create it in "./runs")
 __C.YOLO.ROOT = "2048x2048_ds2_0p396_pad50"
@@ -129,7 +129,10 @@ __C.TRAIN.WARMUP_EPOCHS       = 4
 __C.TEST                      = edict()
 
 ### Path to weights file to use for testing
-__C.TEST.WEIGHTS_FNAME = "./runs/%s/yolov3_epoch%s" % (cfg.YOLO.ROOT, ntl)int(sys.argv[1]) # which save file to load
+__C.TEST.WEIGHTS_FNAME        = "./path/to/weights"
+
+### "Root" name used in all output folders
+__C.TEST.OUTPUT_ROOT          = "test"
 
 ### Same definitions as for TRAIN variables, but for test images
 __C.TEST.ANNOT_PATH           = "./runs/%s/valid.txt" % __C.YOLO.ROOT
@@ -145,7 +148,6 @@ __C.TEST.IX_START = 0           # which test image to start from (0 = from begin
 __C.TEST.RESO = 0.396127        # arcsec/pix
 __C.TEST.PIX_SIZE = 1024        # image half side size in pixels
 __C.TEST.PAD_SIZE = 50          # padding size in pixels
-
 
 ### Discard predicted boxes whose score is below this threshold
 __C.TEST.SCORE_THRESHOLD      = 0.3
