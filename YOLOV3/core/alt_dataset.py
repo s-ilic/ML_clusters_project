@@ -62,11 +62,11 @@ class Dataset(object):
             batch_image = np.zeros((self.batch_size, self.train_input_size, self.train_input_size, 3), dtype=np.float32)
 
             batch_label_sbbox = np.zeros((self.batch_size, self.train_output_sizes[0], self.train_output_sizes[0],
-                                          self.anchor_per_scale, 5 + self.num_regvars), dtype=np.float32)
+                                          self.anchor_per_scale, 5 + 2 * self.num_regvars), dtype=np.float32)
             batch_label_mbbox = np.zeros((self.batch_size, self.train_output_sizes[1], self.train_output_sizes[1],
-                                          self.anchor_per_scale, 5 + self.num_regvars), dtype=np.float32)
+                                          self.anchor_per_scale, 5 + 2 * self.num_regvars), dtype=np.float32)
             batch_label_lbbox = np.zeros((self.batch_size, self.train_output_sizes[2], self.train_output_sizes[2],
-                                          self.anchor_per_scale, 5 + self.num_regvars), dtype=np.float32)
+                                          self.anchor_per_scale, 5 + 2 * self.num_regvars), dtype=np.float32)
 
             batch_sbboxes = np.zeros((self.batch_size, self.max_bbox_per_scale, 4), dtype=np.float32)
             batch_mbboxes = np.zeros((self.batch_size, self.max_bbox_per_scale, 4), dtype=np.float32)
@@ -198,7 +198,7 @@ class Dataset(object):
     def preprocess_true_boxes(self, bboxes):
 
         label = [np.zeros((self.train_output_sizes[i], self.train_output_sizes[i], self.anchor_per_scale,
-                           5 + self.num_classes)) for i in range(3)]
+                           5 + 2 * self.num_regvars)) for i in range(3)]
         bboxes_xywh = [np.zeros((self.max_bbox_per_scale, 4)) for _ in range(3)]
         bbox_count = np.zeros((3,))
 
