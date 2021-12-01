@@ -31,7 +31,7 @@ class Dataset(object):
 
         self.train_input_sizes = cfg.TRAIN.INPUT_SIZE
         self.strides = np.array(cfg.YOLO.STRIDES)
-        self.regvars = utils.read_class_names(cfg.YOLO.REGVARS)
+        self.regvars = utils.read_class_names(cfg.YOLO.NAMES)
         self.num_regvars = len(self.regvars)
         self.anchors = np.array(utils.get_anchors(cfg.YOLO.ANCHORS))
         self.anchor_per_scale = cfg.YOLO.ANCHOR_PER_SCALE
@@ -162,7 +162,7 @@ class Dataset(object):
         if not os.path.exists(image_path):
             raise KeyError("%s does not exist ... " %image_path)
         image = cv2.imread(image_path)
-        bboxes = np.array([list(map(int, box.split(','))) for box in line[1:]])
+        bboxes = np.array([list(map(int, box.split(',')[:4]))+list(map(float, box.split(',')[4:])) for box in line[1:]])
 
         if self.data_aug:
             image, bboxes = self.random_horizontal_flip(np.copy(image), np.copy(bboxes))

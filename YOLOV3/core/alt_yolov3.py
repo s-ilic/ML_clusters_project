@@ -19,7 +19,7 @@ import core.backbone as backbone
 from core.config import cfg
 
 
-NUM_REGVARS     = len(utils.read_class_names(cfg.YOLO.REGVARS))
+NUM_REGVARS     = len(utils.read_class_names(cfg.YOLO.NAMES))
 ANCHORS         = utils.get_anchors(cfg.YOLO.ANCHORS)
 STRIDES         = np.array(cfg.YOLO.STRIDES)
 IOU_LOSS_THRESH = cfg.YOLO.IOU_LOSS_THRESH
