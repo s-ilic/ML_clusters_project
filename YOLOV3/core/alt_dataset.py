@@ -31,8 +31,8 @@ class Dataset(object):
 
         self.train_input_sizes = cfg.TRAIN.INPUT_SIZE
         self.strides = np.array(cfg.YOLO.STRIDES)
-        self.classes = utils.read_class_names(cfg.YOLO.CLASSES)
-        self.num_classes = len(self.classes)
+        self.regvars = utils.read_class_names(cfg.YOLO.REGVARS)
+        self.num_regvars = len(self.regvars)
         self.anchors = np.array(utils.get_anchors(cfg.YOLO.ANCHORS))
         self.anchor_per_scale = cfg.YOLO.ANCHOR_PER_SCALE
         self.max_bbox_per_scale = 150
@@ -62,11 +62,11 @@ class Dataset(object):
             batch_image = np.zeros((self.batch_size, self.train_input_size, self.train_input_size, 3), dtype=np.float32)
 
             batch_label_sbbox = np.zeros((self.batch_size, self.train_output_sizes[0], self.train_output_sizes[0],
-                                          self.anchor_per_scale, 5 + self.num_classes), dtype=np.float32)
+                                          self.anchor_per_scale, 5 + self.num_regvars), dtype=np.float32)
             batch_label_mbbox = np.zeros((self.batch_size, self.train_output_sizes[1], self.train_output_sizes[1],
-                                          self.anchor_per_scale, 5 + self.num_classes), dtype=np.float32)
+                                          self.anchor_per_scale, 5 + self.num_regvars), dtype=np.float32)
             batch_label_lbbox = np.zeros((self.batch_size, self.train_output_sizes[2], self.train_output_sizes[2],
-                                          self.anchor_per_scale, 5 + self.num_classes), dtype=np.float32)
+                                          self.anchor_per_scale, 5 + self.num_regvars), dtype=np.float32)
 
             batch_sbboxes = np.zeros((self.batch_size, self.max_bbox_per_scale, 4), dtype=np.float32)
             batch_mbboxes = np.zeros((self.batch_size, self.max_bbox_per_scale, 4), dtype=np.float32)
@@ -204,13 +204,7 @@ class Dataset(object):
 
         for bbox in bboxes:
             bbox_coor = bbox[:4]
-            bbox_class_ind = bbox[4]
-
-            onehot = np.zeros(self.num_classes, dtype=np.float)
-            onehot[bbox_class_ind] = 1.0
-            uniform_distribution = np.full(self.num_classes, 1.0 / self.num_classes)
-            deta = 0.01
-            smooth_onehot = onehot * (1 - deta) + deta * uniform_distribution
+            bbox_regvars = bbox[4:]
 
             bbox_xywh = np.concatenate([(bbox_coor[2:] + bbox_coor[:2]) * 0.5, bbox_coor[2:] - bbox_coor[:2]], axis=-1)
             bbox_xywh_scaled = 1.0 * bbox_xywh[np.newaxis, :] / self.strides[:, np.newaxis]
@@ -232,7 +226,7 @@ class Dataset(object):
                     label[i][yind, xind, iou_mask, :] = 0
                     label[i][yind, xind, iou_mask, 0:4] = bbox_xywh
                     label[i][yind, xind, iou_mask, 4:5] = 1.0
-                    label[i][yind, xind, iou_mask, 5:] = smooth_onehot
+                    label[i][yind, xind, iou_mask, 5:] = bbox_regvars
 
                     bbox_ind = int(bbox_count[i] % self.max_bbox_per_scale)
                     bboxes_xywh[i][bbox_ind, :4] = bbox_xywh
@@ -249,7 +243,7 @@ class Dataset(object):
                 label[best_detect][yind, xind, best_anchor, :] = 0
                 label[best_detect][yind, xind, best_anchor, 0:4] = bbox_xywh
                 label[best_detect][yind, xind, best_anchor, 4:5] = 1.0
-                label[best_detect][yind, xind, best_anchor, 5:] = smooth_onehot
+                label[best_detect][yind, xind, best_anchor, 5:] = bbox_regvars
 
                 bbox_ind = int(bbox_count[best_detect] % self.max_bbox_per_scale)
                 bboxes_xywh[best_detect][bbox_ind, :4] = bbox_xywh
