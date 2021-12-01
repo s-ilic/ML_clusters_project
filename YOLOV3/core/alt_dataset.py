@@ -201,6 +201,9 @@ class Dataset(object):
                            5 + 2 * self.num_regvars)) for i in range(3)]
         bboxes_xywh = [np.zeros((self.max_bbox_per_scale, 4)) for _ in range(3)]
         bbox_count = np.zeros((3,))
+        # Necessary step to avoid nan in reg loss
+        for i in range(3):
+            label[i][:, :, :, 6::2] = 1.0
 
         for bbox in bboxes:
             bbox_coor = bbox[:4]
