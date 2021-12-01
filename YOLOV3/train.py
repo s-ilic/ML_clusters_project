@@ -4,17 +4,17 @@ import shutil
 import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
-from core.dataset import Dataset
-from core.yolov3 import YOLOv3, decode, compute_loss
-
-
-# Read config file
-# if len(sys.argv) != 2:
-#     raise SyntaxError("Wrong number of arguments.")
-# else:
-#     config_fname = sys.argv[1].strip('.py')
-#     exec(f"from core.{config_fname} import cfg")
 from core.config import cfg
+
+
+if cfg.YOLO.MODE == "class":
+    from core.dataset import Dataset
+    from core.yolov3 import YOLOv3, decode, compute_loss
+elif cfg.YOLO.MODE == "reg":
+    from core.alt_dataset import Dataset
+    from core.alt_yolov3 import YOLOv3, decode, compute_loss
+else:
+    raise ValueError("Wrong mode specified: %s (must be either class or reg)" % cfg.YOLO.MODE)
 
 # Read training and validation sets
 trainset = Dataset('train')

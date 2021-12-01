@@ -14,6 +14,10 @@ __C.YOLO                      = edict()
 ### Choose size of the YOLO network (first layer)
 __C.YOLO.SIZE = 1024
 
+### Choose the working mode of YOLO (classification or regression)
+# __C.YOLO.MODE = "class"
+__C.YOLO.MODE = "reg"
+
 ### Choose name of output folder (code will create it in "./runs")
 __C.YOLO.ROOT = "2048x2048_ds2_0p396_pad50"
 # __C.YOLO.ROOT = "2048x2048_ds4_0p396_pad50"
@@ -25,10 +29,10 @@ __C.YOLO.ROOT = "2048x2048_ds2_0p396_pad50"
 # __C.YOLO.ROOT = "2048x0p396_ds1_mb32_nopad_B"
 # __C.YOLO.ROOT = "2048x0p792_ds1_mb32_nopad_A"
 
-### File containing the YOLO classes names
-__C.YOLO.CLASSES              = "./runs/clusters.names"
-# __C.YOLO.CLASSES              = "./runs/clusters_zbins.names"
-# __C.YOLO.CLASSES              = "./runs/clusters_zbins_ovl.names"
+### File containing the YOLO classes or regression variable names
+__C.YOLO.NAMES              = "./runs/clusters.names"
+# __C.YOLO.NAMES              = "./runs/clusters_zbins.names"
+# __C.YOLO.NAMES              = "./runs/clusters_zbins_ovl.names"
 
 ### File containing the YOLO baseline anchors
 ### NOTES: After doing some clustering studies on ground truth labels, it turns out

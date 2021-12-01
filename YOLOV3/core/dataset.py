@@ -31,7 +31,7 @@ class Dataset(object):
 
         self.train_input_sizes = cfg.TRAIN.INPUT_SIZE
         self.strides = np.array(cfg.YOLO.STRIDES)
-        self.classes = utils.read_class_names(cfg.YOLO.CLASSES)
+        self.classes = utils.read_class_names(cfg.YOLO.NAMES)
         self.num_classes = len(self.classes)
         self.anchors = np.array(utils.get_anchors(cfg.YOLO.ANCHORS))
         self.anchor_per_scale = cfg.YOLO.ANCHOR_PER_SCALE
