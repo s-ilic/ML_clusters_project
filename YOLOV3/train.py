@@ -38,6 +38,9 @@ for i, conv_tensor in enumerate(conv_tensors):
 # Create model and optimizer
 model = tf.keras.Model(input_tensor, output_tensors)
 
+# If requested, load weights
+model.load_weights(cfg.TRAIN.WEIGHTS_FNAME) #loads the weights from the training
+
 # Create TF log directory (for tensorboard), cleans it beforehand if already exists
 if cfg.TRAIN.DO_TBOARD:
     logdir = f"./runs/{cfg.YOLO.ROOT}/log"

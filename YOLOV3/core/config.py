@@ -12,14 +12,14 @@ cfg                           = __C
 __C.YOLO                      = edict()
 
 ### Choose size of the YOLO network (first layer)
-__C.YOLO.SIZE = 1024
+__C.YOLO.SIZE = 512
 
 ### Choose the working mode of YOLO (classification or regression)
 # __C.YOLO.MODE = "class"
 __C.YOLO.MODE = "reg"
 
 ### Choose name of output folder (code will create it in "./runs")
-__C.YOLO.ROOT = "2048x2048_ds2_0p396_pad50"
+# __C.YOLO.ROOT = "2048x2048_ds2_0p396_pad50"
 # __C.YOLO.ROOT = "2048x2048_ds4_0p396_pad50"
 # __C.YOLO.ROOT = "2048x2048_ds4_0p396_pad50_zcut0p3"
 # __C.YOLO.ROOT = "test2"
@@ -28,9 +28,11 @@ __C.YOLO.ROOT = "2048x2048_ds2_0p396_pad50"
 # __C.YOLO.ROOT = "2048x0p396_ds1_mb32_nopad_A"
 # __C.YOLO.ROOT = "2048x0p396_ds1_mb32_nopad_B"
 # __C.YOLO.ROOT = "2048x0p792_ds1_mb32_nopad_A"
+__C.YOLO.ROOT = "2048x0p396_ds4_mb8_nopad_reg_z"
 
 ### File containing the YOLO classes or regression variable names
-__C.YOLO.NAMES              = "./runs/clusters.names"
+__C.YOLO.NAMES              = "./runs/regvars.names"
+# __C.YOLO.NAMES              = "./runs/clusters.names"
 # __C.YOLO.NAMES              = "./runs/clusters_zbins.names"
 # __C.YOLO.NAMES              = "./runs/clusters_zbins_ovl.names"
 
@@ -83,16 +85,20 @@ __C.TRAIN.DO_TBOARD           = False
 __C.TRAIN.ANNOT_PATH          = "./runs/%s/train.txt" % __C.YOLO.ROOT
 # __C.TRAIN.ANNOT_PATH          = "./runs/%s/train_crop.txt" % __C.YOLO.ROOT
 
+### Optional path to weights file to initialize the network with
+# __C.TRAIN.WEIGHTS_FNAME        = None
+__C.TRAIN.WEIGHTS_FNAME        = "./path/to/weights"
+
 # Number of training epochs
-__C.TRAIN.EPOCHS              = 60
+__C.TRAIN.EPOCHS              = 100
 
 ### How many training images per batch (careful, can saturate GPU memory quickly)
 # __C.TRAIN.BATCH_SIZE          = 32
 # __C.TRAIN.BATCH_SIZE          = 16
-# __C.TRAIN.BATCH_SIZE          = 8
+__C.TRAIN.BATCH_SIZE          = 8
 # __C.TRAIN.BATCH_SIZE          = 4
 # __C.TRAIN.BATCH_SIZE          = 2
-__C.TRAIN.BATCH_SIZE          = 1
+# __C.TRAIN.BATCH_SIZE          = 1
 
 ### Alternative method of mini-batch to accomodate large images
 # __C.TRAIN.BATCH_ONE_BY_ONE    = True
@@ -102,7 +108,7 @@ __C.TRAIN.BATCH_ONE_BY_ONE    = False
 ### which the input images are converted into
 # __C.TRAIN.INPUT_SIZE          = [320, 352, 384, 416, 448, 480, 512, 544, 576, 608]
 # __C.TRAIN.INPUT_SIZE          = [512]
-__C.TRAIN.INPUT_SIZE          = [1024]
+__C.TRAIN.INPUT_SIZE          = [512]
 # __C.TRAIN.INPUT_SIZE          = [2048]
 
 ### Choose whether to perform data augmentation (namely, horizontal flip, crop, and
