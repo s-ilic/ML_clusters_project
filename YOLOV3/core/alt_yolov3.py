@@ -19,7 +19,7 @@ import core.backbone as backbone
 from core.config import cfg
 
 
-NUM_CLASS       = len(utils.read_class_names(cfg.YOLO.CLASSES))
+NUM_REGVARS     = len(utils.read_class_names(cfg.YOLO.REGVARS))
 ANCHORS         = utils.get_anchors(cfg.YOLO.ANCHORS)
 STRIDES         = np.array(cfg.YOLO.STRIDES)
 IOU_LOSS_THRESH = cfg.YOLO.IOU_LOSS_THRESH
@@ -34,7 +34,7 @@ def YOLOv3(input_layer):
     conv = common.convolutional(conv, (1, 1, 1024,  512))
 
     conv_lobj_branch = common.convolutional(conv, (3, 3, 512, 1024))
-    conv_lbbox = common.convolutional(conv_lobj_branch, (1, 1, 1024, 3*(NUM_CLASS + 5)), activate=False, bn=False)
+    conv_lbbox = common.convolutional(conv_lobj_branch, (1, 1, 1024, 3*(NUM_REGVARS + 5)), activate=False, bn=False)
 
     conv = common.convolutional(conv, (1, 1,  512,  256))
     conv = common.upsample(conv)
@@ -48,7 +48,7 @@ def YOLOv3(input_layer):
     conv = common.convolutional(conv, (1, 1, 512, 256))
 
     conv_mobj_branch = common.convolutional(conv, (3, 3, 256, 512))
-    conv_mbbox = common.convolutional(conv_mobj_branch, (1, 1, 512, 3*(NUM_CLASS + 5)), activate=False, bn=False)
+    conv_mbbox = common.convolutional(conv_mobj_branch, (1, 1, 512, 3*(NUM_REGVARS + 5)), activate=False, bn=False)
 
     conv = common.convolutional(conv, (1, 1, 256, 128))
     conv = common.upsample(conv)
@@ -62,7 +62,7 @@ def YOLOv3(input_layer):
     conv = common.convolutional(conv, (1, 1, 256, 128))
 
     conv_sobj_branch = common.convolutional(conv, (3, 3, 128, 256))
-    conv_sbbox = common.convolutional(conv_sobj_branch, (1, 1, 256, 3*(NUM_CLASS +5)), activate=False, bn=False)
+    conv_sbbox = common.convolutional(conv_sobj_branch, (1, 1, 256, 3*(NUM_REGVARS +5)), activate=False, bn=False)
 
     return [conv_sbbox, conv_mbbox, conv_lbbox]
 
@@ -76,12 +76,12 @@ def decode(conv_output, i=0):
     batch_size       = conv_shape[0]
     output_size      = conv_shape[1]
 
-    conv_output = tf.reshape(conv_output, (batch_size, output_size, output_size, 3, 5 + NUM_CLASS))
+    conv_output = tf.reshape(conv_output, (batch_size, output_size, output_size, 3, 5 + NUM_REGVARS))
 
     conv_raw_dxdy = conv_output[:, :, :, :, 0:2]
     conv_raw_dwdh = conv_output[:, :, :, :, 2:4]
     conv_raw_conf = conv_output[:, :, :, :, 4:5]
-    conv_raw_prob = conv_output[:, :, :, :, 5: ]
+    conv_raw_regv = conv_output[:, :, :, :, 5: ]
 
     y = tf.tile(tf.range(output_size, dtype=tf.int32)[:, tf.newaxis], [1, output_size])
     x = tf.tile(tf.range(output_size, dtype=tf.int32)[tf.newaxis, :], [output_size, 1])
@@ -95,9 +95,9 @@ def decode(conv_output, i=0):
     pred_xywh = tf.concat([pred_xy, pred_wh], axis=-1)
 
     pred_conf = tf.sigmoid(conv_raw_conf)
-    pred_prob = tf.sigmoid(conv_raw_prob)
+    pred_regv = tf.pow(conv_raw_regv, 1)
 
-    return tf.concat([pred_xywh, pred_conf, pred_prob], axis=-1)
+    return tf.concat([pred_xywh, pred_conf, pred_regv], axis=-1)
 
 def bbox_iou(boxes1, boxes2):
 
@@ -156,17 +156,17 @@ def compute_loss(pred, conv, label, bboxes, i=0):
     batch_size  = conv_shape[0]
     output_size = conv_shape[1]
     input_size  = STRIDES[i] * output_size
-    conv = tf.reshape(conv, (batch_size, output_size, output_size, 3, 5 + NUM_CLASS))
+    conv = tf.reshape(conv, (batch_size, output_size, output_size, 3, 5 + NUM_REGVARS))
 
     conv_raw_conf = conv[:, :, :, :, 4:5]
-    conv_raw_prob = conv[:, :, :, :, 5:]
+    conv_raw_regv = conv[:, :, :, :, 5:]
 
     pred_xywh     = pred[:, :, :, :, 0:4]
     pred_conf     = pred[:, :, :, :, 4:5]
 
     label_xywh    = label[:, :, :, :, 0:4]
     respond_bbox  = label[:, :, :, :, 4:5]
-    label_prob    = label[:, :, :, :, 5:]
+    label_regv    = label[:, :, :, :, 5:]
 
     giou = tf.expand_dims(bbox_giou(pred_xywh, label_xywh), axis=-1)
     input_size = tf.cast(input_size, tf.float32)
@@ -187,10 +187,13 @@ def compute_loss(pred, conv, label, bboxes, i=0):
             respond_bgd * tf.nn.sigmoid_cross_entropy_with_logits(labels=respond_bbox, logits=conv_raw_conf)
     )
 
-    prob_loss = respond_bbox * tf.nn.sigmoid_cross_entropy_with_logits(labels=label_prob, logits=conv_raw_prob)
+    regv_loss = respond_bbox * (
+        tf.pow(conv_raw_regv - label_regv[:, :, :, :, ::2], 2) /
+        tf.pow(label_regv[:, :, :, :, 1::2], 2)
+    )
 
     giou_loss = tf.reduce_mean(tf.reduce_sum(giou_loss, axis=[1,2,3,4]))
     conf_loss = tf.reduce_mean(tf.reduce_sum(conf_loss, axis=[1,2,3,4]))
-    prob_loss = tf.reduce_mean(tf.reduce_sum(prob_loss, axis=[1,2,3,4]))
+    regv_loss = tf.reduce_mean(tf.reduce_sum(regv_loss, axis=[1,2,3,4]))
 
-    return giou_loss, conf_loss, prob_loss
+    return giou_loss, conf_loss, regv_loss
