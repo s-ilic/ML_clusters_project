@@ -1,4 +1,4 @@
-import os
+import os, sys
 from tqdm import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,14 +11,20 @@ import numpy.lib.recfunctions as rfn
 ## Settings for which trained YOLO to use ##
 ############################################
 # path = '/home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/2048x2048_ds2_0p396_pad50'
-path = '/home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/2048x2048_ds4_0p396_pad50'
+# path = '/home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/2048x2048_ds4_0p396_pad50'
 # path = '/home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/2048x2048_ds4_0p396_pad50_zcut0p3'
 # path = '/home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/2048x2048_ds4_0p396_pad50_zbins'
 # path = '/home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/2048x2048_ds4_0p396_pad50_zbins_ovl'
 # num = 19
-num = 29
-meth = "nms"
+# num = 29
+# meth = "nms"
 # meth = "soft-nms"
+
+path = '/home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/2048x0p396_ds4_mb8_nopad_nocl'
+root = "epoch49"
+# path = '/home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/2048x0p396_%s_nopad_nocl' % sys.argv[1]
+# root = "epoch%s" % sys.argv[2]
+
 
 #####################################
 ## Read cluster data in fits files ##
@@ -42,47 +48,103 @@ clu_full_data = rfn.append_fields(
 #########################################################
 ## Prepare some paths to YOLO detections/ground truths ##
 #########################################################
-gt_path = path + '/mAP_%s/ground-truth' % num
-pr_path = path + '/mAP_%s/predicted' % num
+gt_path = path + '/mAP_%s/ground-truth' % root
+pr_path = path + '/mAP_%s/predicted' % root
 # gt_path = path + '/mAP_%s_%s/ground-truth' % (num, meth)
 # pr_path = path + '/mAP_%s_%s/predicted' % (num, meth)
-gtf_path = path + '/mAP_empty_%s/ground-truth' % num
-prf_path = path + '/mAP_empty_%s/predicted' % num
+gtf_path = path + '/mAP_%s_empty/ground-truth' % root
+prf_path = path + '/mAP_%s_empty/predicted' % root
 # gtf_path = path + '/mAP_empty_%s_%s/ground-truth' % (num, meth)
 # prf_path = path + '/mAP_empty_%s_%s/predicted' % (num, meth)
 
 # Clusters
+'''
 all_clu = []
 with open(path + '/valid.txt','r') as f:
     lines = f.readlines()
-for line in lines:
-    all_clu.append(int(line.split()[0].split('/')[-1][:-5]))
+for line in tqdm(lines):
+    clu = []
+    spl = line.split()
+    clu.append(int(spl[0].split('/')[-1][:-5]))
+    for s in spl[1:]:
+        clu.append(list(map(float, s.split(','))))
+    all_clu.append(clu)
+    # all_clu.append(int(line.split()[0].split('/')[-1][:-5]))
+'''
+all_clu = {}
+with open(path + '/valid.txt','r') as f:
+    lines = f.readlines()
+ix_clu = 0
+for line in tqdm(lines):
+    clu = []
+    spl = line.split()
+    # ix_clu = int(spl[0].split('/')[-1][:-5])
+    for s in spl[1:]:
+        clu.append(list(map(float, s.split(','))))
+    # all_clu.append(clu)
+    all_clu[ix_clu] = np.array(clu).astype('int')
+    ix_clu += 1
+    # all_clu.append(int(line.split()[0].split('/')[-1][:-5]))
+
+
+# Read files
+gt_lc = np.loadtxt(
+    gt_path + '/all_txts_lc',
+    dtype=[('lc','int'),('fn','<U20')],
+)
+gt_txt = np.loadtxt(
+    gt_path + '/all_txts',
+    usecols=(1,2,3,4,5),
+)
+pr_lc = np.loadtxt(
+    pr_path + '/all_txts_lc',
+    dtype=[('lc','int'),('fn','<U20')],
+)
+pr_txt = np.loadtxt(
+    pr_path + '/all_txts',
+    usecols=(1,2,3,4,5),
+)
+gtf_lc = np.loadtxt(
+    gtf_path + '/all_txts_lc',
+    dtype=[('lc','int'),('fn','<U20')],
+)
+gtf_txt = np.loadtxt(
+    gtf_path + '/all_txts', # should be empty
+    usecols=(1,2,3,4),
+)
+prf_lc = np.loadtxt(
+    prf_path + '/all_txts_lc',
+    dtype=[('lc','int'),('fn','<U20')],
+)
+prf_txt = np.loadtxt(
+    prf_path + '/all_txts',
+    usecols=(1,2,3,4,5),
+)
 
 
 ####################################################################################
 ####################################################################################
 ####################################################################################
 
-#########################################################
-## Pure counting performance - method 1: use all boxes ##
-#########################################################
+clcgt = np.append(0, np.cumsum(gt_lc['lc'])[:-1])
+clcpr = np.append(0, np.cumsum(pr_lc['lc'])[:-1])
+clcprf = np.append(0, np.cumsum(prf_lc['lc'])[:-1])
+a_thres = 0.
+
 
 # Loop over all images with clusters
 TP, FP, FN = [], [], []
-for f in tqdm(os.listdir(gt_path)):
+for i in tqdm(range(len(gt_lc)-1)):
     # Read ground truth bbox(es)
-    with open(f"{gt_path}/{f}", 'r') as file:
-        lines = file.readlines()
-        coords_gt = [[float(x) for x in l.split()[1:]] for l in lines]
+    coords_gt = gt_txt[clcgt[i]:clcgt[i+1], :]
+    g = coords_gt[:, -1] >= a_thres
     n_gt = len(coords_gt)
     # Read predicted bbox(es)
-    with open(f"{pr_path}/{f}", 'r') as file:
-        lines = file.readlines()
-        coords_pr = [[float(x) for x in l.split()[1:]] for l in lines]
+    coords_pr = pr_txt[clcpr[i]:clcpr[i+1], :]
     n_pr = len(coords_pr)
     # If any predicted box(es), order them by decreasing probability score
     if n_pr > 0:
-        ix = np.array(coords_pr)[:, 0].argsort()[::-1]
+        ix = coords_pr[:, 0].argsort()[::-1]
     # If no predicted bbox: add one FN per true bbox
     if n_pr == 0:
         for i in range(n_gt):
@@ -126,11 +188,9 @@ nFN = np.array(nFN)
 # Loop over all images without clusters
 ct = 0
 TN, FP = [], []
-for f in tqdm(os.listdir(gt_path)):
+for i in tqdm(range(len(gtf_lc)-1)):
     # Read predicted bbox(es)
-    with open(f"{prf_path}/{f}", 'r') as file:
-        lines = file.readlines()
-        coords_pr = [[float(x) for x in l.split()[1:]] for l in lines]
+    coords_pr = prf_txt[clcprf[i]:clcprf[i+1], :]
     n_pr = len(coords_pr)
     # If no predicted bbox: add one TN
     if n_pr == 0:
@@ -163,42 +223,161 @@ pure = nTP / (nTP + nFP + nFPb)
 # Accuracy
 acc = (nTP + nTN) / (nTP + nTN + nFN + nFP + nFPb)
 
-# Plots
-plt.clf()
-plt.plot(pure, comp)
-plt.xlabel("Precision")
-plt.ylabel("Recall")
-plt.xlim(0.9, 1.)
-plt.ylim(0.9, 1.)
-dist = np.sqrt((pure-1)**2. + (comp-1)**2.)
-r = np.nanmin(dist)
-th = np.linspace(0., 2.*np.pi, 1001)
-plt.plot(r*np.cos(th)+1., r*np.sin(th)+1., ls='--', color='green', lw=0.5)
-xt = (pure)[dist == r]
-yt = (comp)[dist == r]
-plt.axvline(xt, ls='--', color='green', lw=0.5)
-plt.axhline(yt, ls='--', color='green', lw=0.5)
-green_thres = thres[dist == r]
-print("green thres = %s" % green_thres)
-diff = (pure - comp)**2.
-r = np.nanmin(diff)
-plt.plot([0.9, 1.], [0.9, 1.], ls='--', color='purple', lw=0.5)
-xt = yt = (pure)[diff == r]
-plt.axvline(xt, ls='--', color='purple', lw=0.5)
-plt.axhline(yt, ls='--', color='purple', lw=0.5)
-purple_thres = thres[diff == r]
-print("purple thres = %s" % purple_thres)
-plt.savefig("rec_vs_prec.pdf")
-plt.clf()
-plt.plot(thres, comp, label='comp = TP / (TP + FN)')
-plt.plot(thres, pure, label='pure = TP / (TP + FP)')
-plt.plot(thres, acc, label='acc = (TP + TN) / TOT')
-plt.axvline(green_thres, ls='--', color='green', lw=0.5)
-plt.axvline(purple_thres, ls='--', color='purple', lw=0.5)
-plt.legend()
-plt.xlim(0.3,1.)
-plt.ylim(0.9, 1.)
-plt.savefig("rec_prec_acc.pdf")
+
+#########################################################
+## Pure counting performance - method 1: use all boxes ##
+#########################################################
+# switch_mode = True if sys.argv[3] == '1' else False
+
+# for switch_mode in [False, True]:
+for switch_mode in [False]:
+    ldir = [f for f in os.listdir(gt_path) if f.endswith('.txt')]
+    # Loop over all images with clusters
+    TP, FP, FN = [], [], []
+    for f in tqdm(ldir):
+        # Read ground truth bbox(es)
+        if not switch_mode:
+            with open(f"{gt_path}/{f}", 'r') as file:
+                lines = file.readlines()
+                coords_gt = [[float(x) for x in l.split()[1:]] for l in lines]
+        else:
+            ix_clu = int(f.split('.')[0])
+            g = all_clu[ix_clu][:, -1] == 1
+            coords_gt = all_clu[ix_clu][g, :-1]
+        n_gt = len(coords_gt)
+        # Read predicted bbox(es)
+        with open(f"{pr_path}/{f}", 'r') as file:
+            lines = file.readlines()
+            coords_pr = [[float(x) for x in l.split()[1:]] for l in lines]
+        n_pr = len(coords_pr)
+        # If any predicted box(es), order them by decreasing probability score
+        if n_pr > 0:
+            ix = np.array(coords_pr)[:, 0].argsort()[::-1]
+        # If no predicted bbox: add one FN per true bbox
+        if n_pr == 0:
+            for i in range(n_gt):
+                FN.append(1.)
+        # If correct number of predicted bboxes: add one TP per true bbox
+        elif n_pr == n_gt:
+            for c in coords_pr:
+                TP.append(c[0])
+        # If too many predicted bboxes:
+        #   add one TP per true bbox and one FP per excess predicted bbox
+        elif n_pr > n_gt:
+            for i in ix[:n_gt]:
+                TP.append(coords_pr[i][0])
+            for i in ix[n_gt:]:
+                FP.append(coords_pr[i][0])
+        # If not enough predicted bboxes:
+        #   add one TP per predicted bbox and one FN per missing predicted bbox
+        elif n_pr < n_gt:
+            for c in coords_pr:
+                TP.append(c[0])
+            for i in range(n_gt-n_pr):
+                FN.append(1.)
+    TP = np.array(TP)
+    FP = np.array(FP)
+    FN = np.array(FN)
+
+    # Compute metrics as a function of threshold
+    nTP, nFP, nFN = [], [], []
+    thres = np.linspace(0., 0.9999, 10000)
+    for t in tqdm(thres):
+        g1 = TP >= t
+        g2 = FP >= t
+        g3 = FN >= t
+        nTP.append(g1.sum()) # TPs below threshold are removed
+        nFP.append(g2.sum()) # FPs below threshold are removed
+        nFN.append(g3.sum() + (len(g1) - g1.sum())) # TPs removed become FNs
+    nTP = np.array(nTP)
+    nFP = np.array(nFP)
+    nFN = np.array(nFN)
+
+    # Loop over all images without clusters
+    ct = 0
+    TN, FP = [], []
+    for f in tqdm(ldir):
+        # Read predicted bbox(es)
+        with open(f"{prf_path}/{f}", 'r') as file:
+            lines = file.readlines()
+            coords_pr = [[float(x) for x in l.split()[1:]] for l in lines]
+        n_pr = len(coords_pr)
+        # If no predicted bbox: add one TN
+        if n_pr == 0:
+            TN.append(1.)
+        # If any predicted bbox: add one FP per predicted bbox
+        # NB: those bboxes are associated with image 'index' via 'ct'
+        else:
+            for i in range(n_pr):
+                FP.append([coords_pr[i][0], ct])
+            ct += 1
+    TNb = np.array(TN)
+    FPb = np.array(FP)
+
+    # Compute metrics as a function of threshold
+    nTNb, nFPb = [], []
+    thres = np.linspace(0., 0.9999, 10000)
+    for t in tqdm(thres):
+        g = FPb[:, 0] >= t
+        new_ct = len(np.unique(FPb[g, 1])) # number of images remaining with nFP > 0
+        diff = ct - new_ct
+        nFPb.append(g.sum()) # FP below threshold are removed
+        nTNb.append(len(TNb) + diff) # If all FP for given image removed, add one TN
+    nTN = np.array(nTNb)
+    nFPb = np.array(nFPb)
+
+    # Recall/Completness
+    comp = nTP / (nTP + nFN)
+    # Precision/Purity
+    pure = nTP / (nTP + nFP + nFPb)
+    # Accuracy
+    acc = (nTP + nTN) / (nTP + nTN + nFN + nFP + nFPb)
+
+    # Plots
+    try:
+        plt.clf()
+        plt.plot(pure, comp)
+        plt.xlabel("Precision")
+        plt.ylabel("Recall")
+        plt.xlim(0.9, 1.)
+        plt.ylim(0.9, 1.)
+        dist = np.sqrt((pure-1)**2. + (comp-1)**2.)
+        r = np.nanmin(dist)
+        th = np.linspace(0., 2.*np.pi, 1001)
+        plt.plot(r*np.cos(th)+1., r*np.sin(th)+1., ls='--', color='green', lw=0.5)
+        xt = (pure)[dist == r]
+        yt = (comp)[dist == r]
+        plt.axvline(xt, ls='--', color='green', lw=0.5)
+        plt.axhline(yt, ls='--', color='green', lw=0.5)
+        green_thres = thres[dist == r]
+        print("green thres = %s" % green_thres)
+        diff = (pure - comp)**2.
+        r = np.nanmin(diff)
+        plt.plot([0.9, 1.], [0.9, 1.], ls='--', color='purple', lw=0.5)
+        xt = yt = (pure)[diff == r]
+        plt.axvline(xt, ls='--', color='purple', lw=0.5)
+        plt.axhline(yt, ls='--', color='purple', lw=0.5)
+        purple_thres = thres[diff == r]
+        print("purple thres = %s" % purple_thres)
+        plt.savefig(path + "/rec_vs_prec_%s%s.pdf" % (root, '_switch' if switch_mode else ''))
+    except:
+        pass
+    try:
+        plt.clf()
+        plt.plot(thres, comp, label='comp = TP / (TP + FN)')
+        plt.plot(thres, pure, label='pure = TP / (TP + FP)')
+        plt.plot(thres, acc, label='acc = (TP + TN) / TOT')
+        plt.axvline(green_thres, ls='--', color='green', lw=0.5)
+        plt.axvline(purple_thres, ls='--', color='purple', lw=0.5)
+        plt.legend()
+        plt.xlim(0.3, 1.)
+        plt.ylim(0., 1.)
+        # plt.ylim(0.9, 1.)
+        plt.savefig(path + "/rec_prec_acc_%s%s.pdf" % (root, '_switch' if switch_mode else ''))
+    except:
+        pass
+
+sys.exit()
 
 # ds2
 # green thres = [0.7709]
@@ -825,42 +1004,84 @@ plt.savefig('empty_map.png', dpi=600)
 
 import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib
 # path = "2048x2048_ds4_0p396_pad50"
 # path = "2048x2048_ds4_0p396_pad50_zcut0p3"
 # path = "2048x2048_ds4_0p396_pad50_zbins_ovl"
-path = "2048x0p396_ds1_mb32_nopad_A"
+# path = "2048x0p396_ds1_mb32_nopad_A"
+# path = "2048x0p396_ds4_mb8_nopad_reg_z"
+# path = "2048x0p396_ds4_mb8_nopad_nocl"
+path = "2048x0p396_ds2_mb2_nopad_nocl"
 # path = "test2"
-plt.clf()
 t1 = np.loadtxt("runs/" + path + '/log_train.txt')
 t2 = np.loadtxt("runs/" + path + '/log_valid.txt')
 #plt.subplot(2,1,2)
 #plt.plot(t1[:, 0], t1[:, 5], label='training sample')
 #plt.plot(t2[:, 0], t2[:, 5], '+', label='validation sample')
-uniqs = np.unique(t2[:, 0])
-x, y1, y2, y2errl, y2erru, y2errl2, y2erru2 = [], [], [], [], [], [], []
-for i, u in enumerate(uniqs):
+uniqs, invixs = np.unique(t2[:, 0], return_inverse=True)
+x, y1, y2, y2m = [], [], [], []
+y2errls, y2errus = [], []
+for i, u in enumerate(uniqs[:-1]):
+    y2errl, y2erru = [], []
     if i==0:
         lb = -np.inf
     else:
         lb = uniqs[i-1]
     x.append(i+1)
     g = (t2[:, 0] == u) & (np.isfinite(t2[:, 5]))
-    y2.append(t2[:, 5][g].mean())
-    y2errl.append(y2[-1]-np.percentile(t2[:, 5][g], 16))
-    y2erru.append(np.percentile(t2[:, 5][g], 84)-y2[-1])
-    y2errl2.append(y2[-1]-np.percentile(t2[:, 5][g], 2.5))
-    y2erru2.append(np.percentile(t2[:, 5][g], 97.5)-y2[-1])
+    y2m.append(t2[:, 5][g].mean())
+    # y2errl.append(y2[-1]-np.percentile(t2[:, 5][g], 16))
+    # y2erru.append(np.percentile(t2[:, 5][g], 84)-y2[-1])
+    # y2errl2.append(y2[-1]-np.percentile(t2[:, 5][g], 2.5))
+    # y2erru2.append(np.percentile(t2[:, 5][g], 97.5)-y2[-1])
+    y2.append(np.percentile(t2[:, 5][g], 50))
+    for n in [5*i for i in range(1,10)]:
+        y2errl.append(np.percentile(t2[:, 5][g], n))
+        y2erru.append(np.percentile(t2[:, 5][g], 100-n))
+    y2errls.append(y2errl)
+    y2errus.append(y2erru)
     g = (t1[:, 0] <= u) & (t1[:, 0] > lb)
     y1.append(t1[:, 5][g].mean())
+y2errls = np.array(y2errls)
+y2errus = np.array(y2errus)
+plt.clf()
 plt.xlabel("Epoch")
 plt.ylabel("Loss")
-plt.plot(x, y1, '+-', label='Training')
-plt.errorbar(x, y2, yerr=[y2errl, y2erru], label='Validation', capsize=5)
-plt.errorbar(x, y2, yerr=[y2errl, y2erru], color='C1', capsize=5)
+# plt.plot(x, y1, '+-', label='Training')
+plt.plot(x, y1, label='Training')
+# plt.errorbar(x, y2, yerr=[y2errl, y2erru], label='Validation', capsize=5)
+# plt.errorbar(x, y2, yerr=[y2errl2, y2erru2], color='C1', capsize=5)
+# plt.plot(x, y2, label='Validation')
+plt.plot(x, y2, label='Validation', color="C1", alpha=0.2)
+plt.axhline(y2[-1], ls='--', color='black', lw=0.5)
+for i in range(y2errls.shape[1]):
+    plt.fill_between(x, y2errls[:, i], y2errus[:, i], color="C1", alpha=0.1)
 #plt.ylim(0,10)
-plt.legend()
 plt.yscale('log')
-plt.savefig("runs/" + path + '/loss_alt.png')
+plt.legend(loc="lower left")
+plt.savefig("runs/" + path + '/loss_alt.pdf')
+
+plt.clf()
+plt.plot(x, y1, label='Training')
+plt.plot(x, y2m, label='Validation', color='red')
+g = np.isfinite(t2[:, 5])
+plt.hist2d(
+    invixs[g],
+    t2[g, 5],
+    bins=[
+        np.arange(101)-0.5,
+        10.**np.linspace(np.log10(t2[g, 5].min()), np.log10(t2[g, 5].max()),65),
+    ],
+    cmap=plt.cm.Oranges,
+    vmax=1300,
+    # norm=matplotlib.colors.LogNorm(),
+)
+plt.yscale('log')
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
+plt.legend(loc="lower left")
+plt.savefig("runs/" + path + '/loss_binned.pdf')
+
 ###############
 #plt.subplot(2,1,2)
 plt.clf()
@@ -869,10 +1090,13 @@ plt.plot(t2[:, 0], t2[:, 5], '+', label='validation sample')
 for u in np.unique(t2[:, 0]):
     g = (t2[:, 0] == u) & (np.isfinite(t2[:, 5]))
     perc = np.percentile(t2[:, 5][g], [2.5, 16., 50., 84., 97.5])
-    plt.plot(u*np.ones(5), perc, '+',color='C2')
+    # plt.plot(u*np.ones(5), perc, '+',color='C2')
+    plt.errorbar(u, perc[2], yerr=[[perc[2]-perc[1]], [perc[3]-perc[2]]], color='C2', capsize=5)
+    plt.errorbar(u, perc[2], yerr=[[perc[2]-perc[0]], [perc[4]-perc[2]]], color='C2', capsize=5)
 plt.xlabel("Number of batchs")
 plt.ylabel("Loss")
-plt.ylim(0,25)
+# plt.ylim(0,25)
+plt.yscale('log')
 plt.legend()
-plt.savefig("runs/" + path + '/loss.png')
+plt.savefig("runs/" + path + '/loss.pdf')
 
