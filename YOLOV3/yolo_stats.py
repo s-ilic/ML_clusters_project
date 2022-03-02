@@ -6,20 +6,14 @@ import corner
 from astropy.io import fits
 from multiprocessing import Pool
 import numpy.lib.recfunctions as rfn
+from itertools import permutations
+from scipy.optimize import minimize
+
+do_plots = False
 
 ############################################
 ## Settings for which trained YOLO to use ##
 ############################################
-# path = '/home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/2048x2048_ds2_0p396_pad50'
-# path = '/home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/2048x2048_ds4_0p396_pad50'
-# path = '/home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/2048x2048_ds4_0p396_pad50_zcut0p3'
-# path = '/home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/2048x2048_ds4_0p396_pad50_zbins'
-# path = '/home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/2048x2048_ds4_0p396_pad50_zbins_ovl'
-# num = 19
-# num = 29
-# meth = "nms"
-# meth = "soft-nms"
-
 path = '/home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/2048x0p396_ds4_mb8_nopad_nocl'
 root = "epoch49"
 # path = '/home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/2048x0p396_%s_nopad_nocl' % sys.argv[1]
@@ -50,27 +44,12 @@ clu_full_data = rfn.append_fields(
 #########################################################
 gt_path = path + '/mAP_%s/ground-truth' % root
 pr_path = path + '/mAP_%s/predicted' % root
-# gt_path = path + '/mAP_%s_%s/ground-truth' % (num, meth)
-# pr_path = path + '/mAP_%s_%s/predicted' % (num, meth)
 gtf_path = path + '/mAP_%s_empty/ground-truth' % root
 prf_path = path + '/mAP_%s_empty/predicted' % root
-# gtf_path = path + '/mAP_empty_%s_%s/ground-truth' % (num, meth)
-# prf_path = path + '/mAP_empty_%s_%s/predicted' % (num, meth)
 
-# Clusters
-'''
-all_clu = []
-with open(path + '/valid.txt','r') as f:
-    lines = f.readlines()
-for line in tqdm(lines):
-    clu = []
-    spl = line.split()
-    clu.append(int(spl[0].split('/')[-1][:-5]))
-    for s in spl[1:]:
-        clu.append(list(map(float, s.split(','))))
-    all_clu.append(clu)
-    # all_clu.append(int(line.split()[0].split('/')[-1][:-5]))
-'''
+################################################################
+## Read clusters validation file with true bbox for reference ##
+################################################################
 all_clu = {}
 with open(path + '/valid.txt','r') as f:
     lines = f.readlines()
@@ -86,8 +65,9 @@ for line in tqdm(lines):
     ix_clu += 1
     # all_clu.append(int(line.split()[0].split('/')[-1][:-5]))
 
-
-# Read files
+###################################
+## Read results from predictions ##
+###################################
 gt_lc = np.loadtxt(
     gt_path + '/all_txts_lc',
     dtype=[('lc','int'),('fn','<U20')],
@@ -120,71 +100,24 @@ prf_txt = np.loadtxt(
     prf_path + '/all_txts',
     usecols=(1,2,3,4,5),
 )
-
-
-####################################################################################
-####################################################################################
-####################################################################################
-
 clcgt = np.append(0, np.cumsum(gt_lc['lc'])[:-1])
 clcpr = np.append(0, np.cumsum(pr_lc['lc'])[:-1])
 clcprf = np.append(0, np.cumsum(prf_lc['lc'])[:-1])
-a_thres = 0.
 
 
-# Loop over all images with clusters
-TP, FP, FN = [], [], []
-for i in tqdm(range(len(gt_lc)-1)):
-    # Read ground truth bbox(es)
-    coords_gt = gt_txt[clcgt[i]:clcgt[i+1], :]
-    g = coords_gt[:, -1] >= a_thres
-    n_gt = len(coords_gt)
-    # Read predicted bbox(es)
-    coords_pr = pr_txt[clcpr[i]:clcpr[i+1], :]
-    n_pr = len(coords_pr)
-    # If any predicted box(es), order them by decreasing probability score
-    if n_pr > 0:
-        ix = coords_pr[:, 0].argsort()[::-1]
-    # If no predicted bbox: add one FN per true bbox
-    if n_pr == 0:
-        for i in range(n_gt):
-            FN.append(1.)
-    # If correct number of predicted bboxes: add one TP per true bbox
-    elif n_pr == n_gt:
-        for c in coords_pr:
-            TP.append(c[0])
-    # If too many predicted bboxes:
-    #   add one TP per true bbox and one FP per excess predicted bbox
-    elif n_pr > n_gt:
-        for i in ix[:n_gt]:
-            TP.append(coords_pr[i][0])
-        for i in ix[n_gt:]:
-            FP.append(coords_pr[i][0])
-    # If not enough predicted bboxes:
-    #   add one TP per predicted bbox and one FN per missing predicted bbox
-    elif n_pr < n_gt:
-        for c in coords_pr:
-            TP.append(c[0])
-        for i in range(n_gt-n_pr):
-            FN.append(1.)
-TP = np.array(TP)
-FP = np.array(FP)
-FN = np.array(FN)
 
-# Compute metrics as a function of threshold
-nTP, nFP, nFN = [], [], []
-thres = np.linspace(0., 0.9999, 10000)
-for t in tqdm(thres):
-    g1 = TP >= t
-    g2 = FP >= t
-    g3 = FN >= t
-    nTP.append(g1.sum()) # TPs below threshold are removed
-    nFP.append(g2.sum()) # FPs below threshold are removed
-    nFN.append(g3.sum() + (len(g1) - g1.sum())) # TPs removed become FNs
-nTP = np.array(nTP)
-nFP = np.array(nFP)
-nFN = np.array(nFN)
 
+####################################################################################
+####################################################################################
+####################################################################################
+####################################################################################
+
+
+
+
+#########################################################
+## For empty images, do some pure counting performance ##
+#########################################################
 # Loop over all images without clusters
 ct = 0
 TN, FP = [], []
@@ -216,43 +149,33 @@ for t in tqdm(thres):
 nTN = np.array(nTNb)
 nFPb = np.array(nFPb)
 
-# Recall/Completness
-comp = nTP / (nTP + nFN)
-# Precision/Purity
-pure = nTP / (nTP + nFP + nFPb)
-# Accuracy
-acc = (nTP + nTN) / (nTP + nTN + nFN + nFP + nFPb)
 
+##############################################################
+## For clusters images, option 1: pure counting performance ##
+##############################################################
+'''
+# Area threshold on which bbox to include in the counting
+# all_a = [0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.]
+all_a = np.linspace(0., 1., 101)
 
-#########################################################
-## Pure counting performance - method 1: use all boxes ##
-#########################################################
-# switch_mode = True if sys.argv[3] == '1' else False
+for a_thres in all_a:
 
-# for switch_mode in [False, True]:
-for switch_mode in [False]:
-    ldir = [f for f in os.listdir(gt_path) if f.endswith('.txt')]
+    print(f"Area threshold = {a_thres}")
+
     # Loop over all images with clusters
     TP, FP, FN = [], [], []
-    for f in tqdm(ldir):
+    for i in tqdm(range(len(gt_lc)-1)):
         # Read ground truth bbox(es)
-        if not switch_mode:
-            with open(f"{gt_path}/{f}", 'r') as file:
-                lines = file.readlines()
-                coords_gt = [[float(x) for x in l.split()[1:]] for l in lines]
-        else:
-            ix_clu = int(f.split('.')[0])
-            g = all_clu[ix_clu][:, -1] == 1
-            coords_gt = all_clu[ix_clu][g, :-1]
+        coords_gt = gt_txt[clcgt[i]:clcgt[i+1], :]
+        g = coords_gt[:, -1] >= a_thres
+        coords_gt = coords_gt[g, :]
         n_gt = len(coords_gt)
         # Read predicted bbox(es)
-        with open(f"{pr_path}/{f}", 'r') as file:
-            lines = file.readlines()
-            coords_pr = [[float(x) for x in l.split()[1:]] for l in lines]
+        coords_pr = pr_txt[clcpr[i]:clcpr[i+1], :]
         n_pr = len(coords_pr)
         # If any predicted box(es), order them by decreasing probability score
         if n_pr > 0:
-            ix = np.array(coords_pr)[:, 0].argsort()[::-1]
+            ix = coords_pr[:, 0].argsort()[::-1]
         # If no predicted bbox: add one FN per true bbox
         if n_pr == 0:
             for i in range(n_gt):
@@ -293,39 +216,6 @@ for switch_mode in [False]:
     nFP = np.array(nFP)
     nFN = np.array(nFN)
 
-    # Loop over all images without clusters
-    ct = 0
-    TN, FP = [], []
-    for f in tqdm(ldir):
-        # Read predicted bbox(es)
-        with open(f"{prf_path}/{f}", 'r') as file:
-            lines = file.readlines()
-            coords_pr = [[float(x) for x in l.split()[1:]] for l in lines]
-        n_pr = len(coords_pr)
-        # If no predicted bbox: add one TN
-        if n_pr == 0:
-            TN.append(1.)
-        # If any predicted bbox: add one FP per predicted bbox
-        # NB: those bboxes are associated with image 'index' via 'ct'
-        else:
-            for i in range(n_pr):
-                FP.append([coords_pr[i][0], ct])
-            ct += 1
-    TNb = np.array(TN)
-    FPb = np.array(FP)
-
-    # Compute metrics as a function of threshold
-    nTNb, nFPb = [], []
-    thres = np.linspace(0., 0.9999, 10000)
-    for t in tqdm(thres):
-        g = FPb[:, 0] >= t
-        new_ct = len(np.unique(FPb[g, 1])) # number of images remaining with nFP > 0
-        diff = ct - new_ct
-        nFPb.append(g.sum()) # FP below threshold are removed
-        nTNb.append(len(TNb) + diff) # If all FP for given image removed, add one TN
-    nTN = np.array(nTNb)
-    nFPb = np.array(nFPb)
-
     # Recall/Completness
     comp = nTP / (nTP + nFN)
     # Precision/Purity
@@ -333,184 +223,231 @@ for switch_mode in [False]:
     # Accuracy
     acc = (nTP + nTN) / (nTP + nTN + nFN + nFP + nFPb)
 
+
     # Plots
-    try:
+    g = np.isfinite(pure) & np.isfinite(comp) & np.isfinite(acc)
+    pure = pure[g]
+    comp = comp[g]
+    acc = acc[g]
+    thres = thres[g]
+
+    dist = np.sqrt((pure-1)**2. + (comp-1)**2.)
+    diff = (pure - comp)**2.
+    i_dist_min = np.argmin(dist)
+    i_diff_min = np.argmin(diff)
+    green_pure = pure[i_dist_min]
+    green_comp = comp[i_dist_min]
+    green_thres = thres[i_dist_min]
+    purple_pure = purple_comp = pure[i_diff_min]
+    purple_thres = thres[i_diff_min]
+    print("green thres = %s" % green_thres)
+    print("purple thres = %s" % purple_thres)
+
+    with open(path + "/%s_stat.txt" % root, "a") as f:
+        f.write("%s %s %s %s %s %s\n" % (
+            a_thres,
+            green_pure,
+            green_comp,
+            green_thres,
+            purple_pure,
+            purple_thres,
+        ))
+
+    if do_plots:
         plt.clf()
+        plt.title(root)
         plt.plot(pure, comp)
         plt.xlabel("Precision")
         plt.ylabel("Recall")
-        plt.xlim(0.9, 1.)
-        plt.ylim(0.9, 1.)
-        dist = np.sqrt((pure-1)**2. + (comp-1)**2.)
-        r = np.nanmin(dist)
+        plt.xlim(0.8, 1.)
+        plt.ylim(0.8, 1.)
         th = np.linspace(0., 2.*np.pi, 1001)
-        plt.plot(r*np.cos(th)+1., r*np.sin(th)+1., ls='--', color='green', lw=0.5)
-        xt = (pure)[dist == r]
-        yt = (comp)[dist == r]
-        plt.axvline(xt, ls='--', color='green', lw=0.5)
-        plt.axhline(yt, ls='--', color='green', lw=0.5)
-        green_thres = thres[dist == r]
-        print("green thres = %s" % green_thres)
-        diff = (pure - comp)**2.
-        r = np.nanmin(diff)
-        plt.plot([0.9, 1.], [0.9, 1.], ls='--', color='purple', lw=0.5)
-        xt = yt = (pure)[diff == r]
-        plt.axvline(xt, ls='--', color='purple', lw=0.5)
-        plt.axhline(yt, ls='--', color='purple', lw=0.5)
-        purple_thres = thres[diff == r]
-        print("purple thres = %s" % purple_thres)
-        plt.savefig(path + "/rec_vs_prec_%s%s.pdf" % (root, '_switch' if switch_mode else ''))
-    except:
-        pass
-    try:
+        plt.plot(
+            dist[i_dist_min]*np.cos(th)+1.,
+            dist[i_dist_min]*np.sin(th)+1.,
+            ls='--',
+            color='green',
+            lw=0.5,
+        )
+        plt.axvline(green_pure, ls='--', color='green', lw=0.5)
+        plt.axhline(green_comp, ls='--', color='green', lw=0.5)
+        plt.plot([0.8, 1.], [0.8, 1.], ls='--', color='purple', lw=0.5)
+        plt.axvline(purple_pure, ls='--', color='purple', lw=0.5)
+        plt.axhline(purple_comp, ls='--', color='purple', lw=0.5)
+        suf = "thr%s" % str(a_thres).replace(".", "p")
+        plt.savefig(path + "/rec_vs_prec_%s_%s.pdf" % (root, suf))
+        plt.savefig(path + "/rec_vs_prec_%s_%s.png" % (root, suf))
+
         plt.clf()
+        plt.title(root)
         plt.plot(thres, comp, label='comp = TP / (TP + FN)')
         plt.plot(thres, pure, label='pure = TP / (TP + FP)')
         plt.plot(thres, acc, label='acc = (TP + TN) / TOT')
         plt.axvline(green_thres, ls='--', color='green', lw=0.5)
+        plt.axhline(green_pure, ls='--', color='green', lw=0.5)
+        plt.axhline(green_comp, ls='--', color='green', lw=0.5)
         plt.axvline(purple_thres, ls='--', color='purple', lw=0.5)
+        plt.axhline(purple_pure, ls='--', color='purple', lw=0.5)
         plt.legend()
         plt.xlim(0.3, 1.)
         plt.ylim(0., 1.)
-        # plt.ylim(0.9, 1.)
-        plt.savefig(path + "/rec_prec_acc_%s%s.pdf" % (root, '_switch' if switch_mode else ''))
-    except:
-        pass
+        plt.savefig(path + "/rec_prec_acc_%s_%s.pdf" % (root, suf))
+        plt.savefig(path + "/rec_prec_acc_%s_%s.png" % (root, suf))
+'''
 
-sys.exit()
+####################################################
+## For clusters images, option 2: counting & IoUs ##
+####################################################
 
-# ds2
-# green thres = [0.7709]
-# purple thres = [0.7861]
+def IoUs(pred_r, true_r):
+    # Predicted box coordinates
+    x1p,y1p,x2p,y2p = pred_r
+    # True box coordinates
+    x1t,y1t,x2t,y2t = true_r
+    # For the predicted box, ensure x1<x2 and y1<y2
+    X1p = min(x1p,x2p)
+    X2p = max(x1p,x2p)
+    Y1p = min(y1p,y2p)
+    Y2p = max(y1p,y2p)
+    # Calculate area of true box
+    At = (x2t-x1t)*(y2t-y1t)
+    # Calculate area of predicted box
+    Ap = (X2p-X1p)*(Y2p-Y1p)
+    # Calculate intersection of true and predicted boxes
+    x1i = max(X1p,x1t)
+    x2i = min(X2p,x2t)
+    y1i = max(Y1p,y1t)
+    y2i = min(Y2p,y2t)
+    if (x2i>x1i) & (y2i>y1i):
+        intrsc = (x2i-x1i)*(y2i-y1i)
+    else:
+        intrsc = 0.
+    # Find coordinates of smallest enclosing box
+    x1c = min(X1p,x1t)
+    x2c = max(X2p,x2t)
+    y1c = min(Y1p,y1t)
+    y2c = max(Y2p,y2t)
+    # Calculate its area
+    Ac = (x2c-x1c)*(y2c-y1c)
+    # Calculate metrics
+    union = Ap + At - intrsc
+    IoU = intrsc / union
+    GIoU = IoU - 1. + union / Ac
+    return IoU, GIoU
 
-# ds4
-# green thres = [0.8869]
-# purple thres = [0.887]
-
-
-###################################################################
-###################################################################
-
-
-###############################################################
-## Pure counting performance - method 1: use only main boxes ##
-###############################################################
-
-# Loop over all images with clusters
-TP, FN = [], []
-for f in tqdm(os.listdir(gt_path)):
+def do_stat(p):
+    i, a_thres, p_thres = p
     # Read ground truth bbox(es)
-    with open(f"{gt_path}/{f}", 'r') as file:
-        lines = file.readlines()
-        coords_gt = [[float(x) for x in l.split()[1:]] for l in lines]
+    coords_gt = gt_txt[clcgt[i]:clcgt[i+1], :]
+    g = coords_gt[:, -1] >= a_thres
+    coords_gt = coords_gt[g, :]
     n_gt = len(coords_gt)
     # Read predicted bbox(es)
-    with open(f"{pr_path}/{f}", 'r') as file:
-        lines = file.readlines()
-        coords_pr = [[float(x) for x in l.split()[1:]] for l in lines]
+    coords_pr = pr_txt[clcpr[i]:clcpr[i+1], :]
+    g = coords_pr[:, 0] >= p_thres
+    coords_pr = coords_pr[g, :]
     n_pr = len(coords_pr)
-    # If any predicted box(es), order them by decreasing probability score
-    if n_pr > 0:
-        ix = np.array(coords_pr)[:, 0].argsort()[::-1]
-    # If no predicted bbox: add one FN
+    # No predicted bbox and no truth bbox: add one TN
+    if (n_pr == 0) & (n_gt == 0):
+        TN = 1
+        TP, FP, FN = 0, 0, 0
+    # If no predicted bbox: add one FN per truth bbox
+    elif n_pr == 0:
+        FN = n_gt
+        TP, TN, FP = 0, 0, 0
+    # If correct number of predicted bboxes: add one TP per truth bbox
+    elif n_pr == n_gt:
+        TP = n_gt
+        TN, FP, FN = 0, 0, 0
+    # If too many predicted bboxes:
+    # add one TP per truth bbox and one FP per excess predicted bbox
+    elif n_pr > n_gt:
+        TP = n_gt
+        FP = n_pr - n_gt
+        TN, FN = 0, 0
+    # If not enough predicted bboxes:
+    # add one TP per predicted bbox and one FN per missing predicted bbox
+    elif n_pr < n_gt:
+        TP = n_pr
+        FN = n_gt - n_pr
+        TN, FP = 0, 0
+    ### Pair truth and predicted boxes to get best average GIoU
+    # Special case of no predicted bboxes
     if n_pr == 0:
-        FN.append(1.)
-    # If any predicted bbox: add one TP
-    else:
-        TP.append(coords_pr[ix[0]][0])
-TP = np.array(TP)
-FN = np.array(FN)
+        avg_GIoU = -2.
+        return TP, TN, FP, FN, avg_GIoU
+    # Special case of no truth bboxes
+    if n_gt == 0:
+        avg_GIoU = -2.
+        return TP, TN, FP, FN, avg_GIoU
+    # Compute matrix of GIoU between (predicted,truth) pairs
+    mat_GIoU = np.zeros((n_pr, n_gt))
+    for ix in range(n_pr):
+        for jx in range(n_gt):
+            mat_GIoU[ix, jx] = IoUs(coords_pr[ix, 1:], coords_gt[jx, :-1])[1]
+    # Special case of one truth or one predicted bbox (take max of previous array)
+    if (n_pr == 1) or (n_gt == 1):
+        avg_GIoU = mat_GIoU.max()
+        return TP, TN, FP, FN, avg_GIoU
+    # General case (find set of pairs with max avg GIoU)
+    all_avg_GIoU = []
+    for comb in list(permutations(range(max(n_pr,n_gt)), n_gt)):
+        tmp_GIoU = 0.
+        for ix in range(n_gt):
+            if comb[ix] < n_pr:
+                tmp_GIoU += mat_GIoU[comb[ix], ix]
+        all_avg_GIoU.append(tmp_GIoU)
+    avg_GIoU = np.max(all_avg_GIoU) / n_pr
+    return TP, TN, FP, FN, avg_GIoU
 
-# Compute metrics as a function of threshold
-nTP, nFN = [], []
-thres = np.linspace(0., 0.9999, 10000)
-for t in tqdm(thres):
-    g1 = TP >= t
-    g2 = FN >= t
-    nTP.append(g1.sum()) # TPs below threshold are removed
-    nFN.append(g2.sum() + (len(g1) - g1.sum())) # TPs removed become FNs
-nTP = np.array(nTP)
-nFN = np.array(nFN)
+if __name__ == '__main__':
+    def get_tot(pthr, athr, min_mode=True):
+        pool = Pool(32)
+        inputs = []
+        for i in range(len(gt_lc)-1):
+            inputs.append([i, athr, pthr])
+        # res = list(
+        #     tqdm(
+        #         pool.imap(do_stat, inputs),
+        #         total=len(inputs),
+        #         smoothing=0.,
+        #     )
+        # )
+        res = pool.map(do_stat, inputs)
+        pool.close()
+        pool.join()
+        all_stats = np.array(res)
+        g = all_stats[:, -1] > -1.9
+        if not min_mode:
+            tot_avg_GIoU = (
+                np.sum(all_stats[g, 0] * all_stats[g, -1])
+                / np.sum(all_stats[g, 0])
+            )
+            return tot_avg_GIoU
+        # Metrics
+        nTP = np.sum(all_stats[g, 0])
+        nFP = np.sum(all_stats[g, 2])
+        nFN = np.sum(all_stats[g, 3])
+        # Empty images
+        g = FPb[:, 0] >= pthr
+        new_ct = len(np.unique(FPb[g, 1])) # number of images remaining with nFP > 0
+        diff = ct - new_ct
+        nFPb = g.sum() # FP below threshold are removed
+        nTNb = len(TNb) + diff # If all FP for given image removed, add one TN
+        # Recall/Completness
+        comp = nTP / (nTP + nFN)
+        # Precision/Purity
+        pure = nTP / (nTP + nFP + nFPb)
+        dist = (1. - comp)**2. + (1. - pure)**2.
+        print(comp,pure,dist)
+        return dist
+    mini = minimize(get_tot, [0.5], args=(1., True), method='Nelder-Mead')
 
-# Loop over all images without clusters
-ct = 0
-TN, FP = [], []
-for f in tqdm(os.listdir(gt_path)):
-    # Read predicted bbox(es)
-    with open(f"{prf_path}/{f}", 'r') as file:
-        lines = file.readlines()
-        coords_pr = [[float(x) for x in l.split()[1:]] for l in lines]
-    n_pr = len(coords_pr)
-    # If no predicted bbox: add one TN
-    if n_pr == 0:
-        TN.append(1.)
-    # If any predicted bbox: add one FP per predicted bbox
-    # NB: those bboxes are associated with image 'index' via 'ct'
-    else:
-        for i in range(n_pr):
-            FP.append([coords_pr[i][0], ct])
-        ct += 1
-TN = np.array(TN)
-FP = np.array(FP)
-
-# Compute metrics as a function of threshold
-nTN, nFP = [], []
-thres = np.linspace(0., 0.9999, 10000)
-for t in tqdm(thres):
-    g = FP[:, 0] >= t
-    new_ct = len(np.unique(FP[g, 1])) # number of images remaining with nFP > 0
-    diff = ct - new_ct
-    nFP.append(new_ct) # == n_images with at least one FP
-    nTN.append(len(TN) + diff) #  == n_images with no FP
-nTN = np.array(nTN)
-nFP = np.array(nFP)
-
-# Recall/Completness
-comp = nTP / (nTP + nFN)
-# Precision/Purity
-pure = nTP / (nTP + nFP)
-# Accuracy
-acc = (nTP + nTN) / (nTP + nTN + nFN + nFP)
-
-# Plots
 plt.clf()
-plt.plot(pure, comp)
-plt.xlabel("Precision")
-plt.ylabel("Recall")
-plt.xlim(0.9, 1.)
-plt.ylim(0.9, 1.)
-dist = np.sqrt((pure-1)**2. + (comp-1)**2.)
-r = np.nanmin(dist)
-th = np.linspace(0., 2.*np.pi, 1001)
-plt.plot(r*np.cos(th)+1., r*np.sin(th)+1., ls='--', color='green', lw=0.5)
-xt = (pure)[dist == r]
-yt = (comp)[dist == r]
-plt.axvline(xt[0], ls='--', color='green', lw=0.5)
-plt.axhline(yt[0], ls='--', color='green', lw=0.5)
-green_thres = thres[dist == r]
-print("green thres = %s" % green_thres)
-diff = (pure - comp)**2.
-r = np.nanmin(diff)
-plt.plot([0.9, 1.], [0.9, 1.], ls='--', color='purple', lw=0.5)
-xt = yt = (pure)[diff == r]
-plt.axvline(xt, ls='--', color='purple', lw=0.5)
-plt.axhline(yt, ls='--', color='purple', lw=0.5)
-purple_thres = thres[diff == r]
-print("purple thres = %s" % purple_thres)
-plt.savefig("rec_vs_prec2.pdf")
-plt.clf()
-plt.plot(thres, comp, label='comp = TP / (TP + FN)')
-plt.plot(thres, pure, label='pure = TP / (TP + FP)')
-plt.plot(thres, acc, label='acc = (TP + TN) / TOT')
-plt.axvline(green_thres[0], ls='--', color='green', lw=0.5)
-plt.axvline(purple_thres, ls='--', color='purple', lw=0.5)
-plt.legend()
-plt.xlim(0.3,1.)
-plt.ylim(0.9, 1.)
-plt.savefig("rec_prec_acc2.pdf")
+plt.hist(all_stats[g, -1], bins=128, range=[-2,1])
+plt.savefig("GIoU.pdf")
 
-#green thres = [0.7781 0.7782]
-#purple thres = [0.7904]
+sys.exit()
 
 
 ###################################################################
