@@ -14,10 +14,10 @@ do_plots = False
 ############################################
 ## Settings for which trained YOLO to use ##
 ############################################
-path = '/home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/2048x0p396_ds4_mb8_nopad_nocl'
-root = "epoch49"
-# path = '/home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/2048x0p396_%s_nopad_nocl' % sys.argv[1]
-# root = "epoch%s" % sys.argv[2]
+# path = '/home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/2048x0p396_ds4_mb8_nopad_nocl'
+# root = "epoch49"
+path = '/home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/2048x0p396_%s_nopad_nocl' % sys.argv[1]
+root = "epoch%s" % sys.argv[2]
 
 
 #####################################
@@ -120,34 +120,37 @@ clcprf = np.append(0, np.cumsum(prf_lc['lc'])[:-1])
 #########################################################
 # Loop over all images without clusters
 ct = 0
-TN, FP = [], []
+TN, FP = 0, []
 for i in tqdm(range(len(gtf_lc)-1)):
     # Read predicted bbox(es)
     coords_pr = prf_txt[clcprf[i]:clcprf[i+1], :]
     n_pr = len(coords_pr)
     # If no predicted bbox: add one TN
     if n_pr == 0:
-        TN.append(1.)
+        TN += 1
     # If any predicted bbox: add one FP per predicted bbox
-    # NB: those bboxes are associated with image 'index' via 'ct'
+    # NB: those FP are associated with their image 'index' via 'ct'
+    #     and with their detection score
     else:
         for i in range(n_pr):
             FP.append([coords_pr[i][0], ct])
         ct += 1
-TNb = np.array(TN)
-FPb = np.array(FP)
+all_TN_empty = TN
+all_FP_empty = np.array(FP)
 
-# Compute metrics as a function of threshold
-nTNb, nFPb = [], []
+# Compute metrics as a function of detection threshold
+'''
+thres_all_TN_empty, thres_all_FP_empty = [], []
 thres = np.linspace(0., 0.9999, 10000)
 for t in tqdm(thres):
-    g = FPb[:, 0] >= t
-    new_ct = len(np.unique(FPb[g, 1])) # number of images remaining with nFP > 0
-    diff = ct - new_ct
-    nFPb.append(g.sum()) # FP below threshold are removed
-    nTNb.append(len(TNb) + diff) # If all FP for given image removed, add one TN
-nTN = np.array(nTNb)
-nFPb = np.array(nFPb)
+    g = all_FP_empty[:, 0] >= t                     # keep only FP above detection threshold
+    new_ct = len(np.unique(all_FP_empty[g, 1]))     # number of images remaining with n_FP > 0
+    diff = ct - new_ct                              # number of images with n_FP = 0
+    thres_all_FP_empty.append(g.sum())              # recount the number of FP after threshold
+    thres_all_TN_empty.append(all_TN_empty + diff)  # If all FP for given image removed, add one TN
+thres_all_TN_empty = np.array(thres_all_TN_empty)
+thres_all_FP_empty = np.array(thres_all_FP_empty)
+'''
 
 
 ##############################################################
@@ -339,12 +342,12 @@ def do_stat(p):
     i, a_thres, p_thres = p
     # Read ground truth bbox(es)
     coords_gt = gt_txt[clcgt[i]:clcgt[i+1], :]
-    g = coords_gt[:, -1] >= a_thres
+    g = coords_gt[:, -1] >= a_thres # Apply area threshold
     coords_gt = coords_gt[g, :]
     n_gt = len(coords_gt)
     # Read predicted bbox(es)
     coords_pr = pr_txt[clcpr[i]:clcpr[i+1], :]
-    g = coords_pr[:, 0] >= p_thres
+    g = coords_pr[:, 0] >= p_thres # Apply score threshold
     coords_pr = coords_pr[g, :]
     n_pr = len(coords_pr)
     # No predicted bbox and no truth bbox: add one TN
@@ -392,16 +395,17 @@ def do_stat(p):
     # General case (find set of pairs with max avg GIoU)
     all_avg_GIoU = []
     for comb in list(permutations(range(max(n_pr,n_gt)), n_gt)):
-        tmp_GIoU = 0.
+        tmp_sum_GIoU = 0.
         for ix in range(n_gt):
             if comb[ix] < n_pr:
-                tmp_GIoU += mat_GIoU[comb[ix], ix]
-        all_avg_GIoU.append(tmp_GIoU)
-    avg_GIoU = np.max(all_avg_GIoU) / n_pr
+                tmp_sum_GIoU += mat_GIoU[comb[ix], ix]
+        all_avg_GIoU.append(np.mean(tmp_sum_GIoU))
+    avg_GIoU = np.max(all_avg_GIoU)
     return TP, TN, FP, FN, avg_GIoU
 
 if __name__ == '__main__':
-    def get_tot(pthr, athr, min_mode=True):
+    # def get_tot(pthr, athr, min_mode=True):
+    def get_tot(pthr, athr):
         pool = Pool(32)
         inputs = []
         for i in range(len(gt_lc)-1):
@@ -417,37 +421,111 @@ if __name__ == '__main__':
         pool.close()
         pool.join()
         all_stats = np.array(res)
-        g = all_stats[:, -1] > -1.9
-        if not min_mode:
-            tot_avg_GIoU = (
-                np.sum(all_stats[g, 0] * all_stats[g, -1])
-                / np.sum(all_stats[g, 0])
-            )
-            return tot_avg_GIoU
+        # g = all_stats[:, -1] > -1.9
+        # if not min_mode:
+        #     tot_avg_GIoU = (
+        #         np.sum(all_stats[g, 0] * all_stats[g, -1])
+        #         / np.sum(all_stats[g, 0])
+        #     )
+        #     return tot_avg_GIoU
         # Metrics
-        nTP = np.sum(all_stats[g, 0])
-        nFP = np.sum(all_stats[g, 2])
-        nFN = np.sum(all_stats[g, 3])
+        all_TP = np.sum(all_stats[:, 0])
+        all_TN = np.sum(all_stats[:, 1])
+        all_FP = np.sum(all_stats[:, 2])
+        all_FN = np.sum(all_stats[:, 3])
+        tot_avg_GIoU = (
+            np.sum(all_stats[:, 0] * all_stats[:, 4])
+            / np.sum(all_stats[:, 0])
+        )
         # Empty images
-        g = FPb[:, 0] >= pthr
-        new_ct = len(np.unique(FPb[g, 1])) # number of images remaining with nFP > 0
+        g = all_FP_empty[:, 0] >= pthr
+        new_ct = len(np.unique(all_FP_empty[g, 1]))
         diff = ct - new_ct
-        nFPb = g.sum() # FP below threshold are removed
-        nTNb = len(TNb) + diff # If all FP for given image removed, add one TN
+        thres_all_FP_empty = g.sum()
+        thres_all_TN_empty = all_TN_empty + diff
         # Recall/Completness
-        comp = nTP / (nTP + nFN)
+        comp = all_TP / (all_TP + all_FN)
         # Precision/Purity
-        pure = nTP / (nTP + nFP + nFPb)
-        dist = (1. - comp)**2. + (1. - pure)**2.
-        print(comp,pure,dist)
-        return dist
-    mini = minimize(get_tot, [0.5], args=(1., True), method='Nelder-Mead')
-
-plt.clf()
-plt.hist(all_stats[g, -1], bins=128, range=[-2,1])
-plt.savefig("GIoU.pdf")
+        pure = all_TP / (all_TP + all_FP + thres_all_FP_empty)
+        # Accuracy
+        acc = (
+            (all_TP + all_TN + thres_all_TN_empty) /
+            (
+                all_TP + all_TN + all_FP + all_FN
+                + thres_all_FP_empty + thres_all_TN_empty
+            )
+        )
+        output = (
+            all_TP, all_TN, all_FP, all_FN,
+            thres_all_FP_empty, thres_all_TN_empty,
+            comp, pure, acc,
+            np.sqrt((1-comp)**2+(1-pure)**2), tot_avg_GIoU,
+        )
+        return output
+    # mini = minimize(get_tot, [0.5], args=(1., True), method='Nelder-Mead')
+    plt.figure(figsize=(16,9))
+    all_outs = []
+    ix = 1
+    for athr_tmp in tqdm(np.linspace(0., 1., 21)):
+        plt.subplot(3,7,ix)
+        ix += 1
+        outs = []
+        for pthr_tmp in np.linspace(0.3, 0.99, 70):
+            outs.append(get_tot(pthr_tmp, athr_tmp))
+        all_outs.append(outs)
+        outs = np.array(outs)
+        x = np.linspace(0.3, 0.99, 70)
+        g = np.all(np.isfinite(outs), axis=1)
+        plt.plot(x, outs[:, 6], label='Completness', color='C0')
+        plt.plot(x, outs[:, 7], label='Purity', color='C1')
+        plt.plot(x, outs[:, 8], label='Accuracy', color='C2')
+        plt.axvline(x[g][outs[g, 8].argmax()], ls='--', color='C2')
+        plt.plot(x, outs[:, 9], label='D(1,1)', color='C3')
+        plt.axvline(x[g][outs[g, 9].argmin()], ls='--', color='C3')
+        plt.plot(x, outs[:, 10], label='Avg GIoU', color='C4')
+    plt.legend()
+    plt.suptitle(f"Epoch {sys.argv[2]}")
+    plt.tight_layout()
+    plt.savefig(f"{path}/GIoU_{sys.argv[2]}.pdf")
+    np.savez(
+        f"{path}/stats_{sys.argv[2]}",
+        all_outs=np.array(all_outs),
+    )
 
 sys.exit()
+
+plt.clf()
+x, y, d, c, io = [], [], [], [], []
+for i in range(1,100):
+    t = np.load(f"/home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/2048x0p396_ds4_mb8_nopad_nocl/stats_{i}.npz")['all_outs'][20, :, :]
+    g = np.all(np.isfinite(t), axis=1)
+    ix = t[g, 9].argmin()
+    x.append(t[g, 6][ix])
+    y.append(t[g, 7][ix])
+    d.append(t[g, 9].min())
+    c.append(i)
+    io.append(t[g, 10][ix])
+plt.subplot(1,2,1)
+plt.scatter(x, y, c=c)
+plt.colorbar()
+plt.subplot(1,2,2)
+plt.scatter(x, y, c=io)
+plt.colorbar()
+plt.savefig("opti.pdf")
+dist = np.array(d)**2. + (1.-np.array(io))**2.
+r = np.sqrt(dist.min())
+theta = np.linspace(0., 2.*np.pi, 1001)
+plt.figure(figsize=(6,6))
+plt.scatter(io, d, c=c)
+plt.plot(r*np.cos(theta)+1, r*np.sin(theta), color='red')
+plt.xlim(0.8,1)
+plt.ylim(0.,0.2)
+cbar  =plt.colorbar()
+cbar.set_label("Epoch")
+plt.savefig("opti_2.pdf")
+dist = np.array(d)**2. + (1.-np.array(io))**2.
+r = np.sqrt(dist.min())
+pl
 
 
 ###################################################################
