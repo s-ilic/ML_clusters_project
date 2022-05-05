@@ -103,15 +103,17 @@ def run_kmeans(ann_dims, anchor_num):
 
 def _main_(argv):
 
-    with open(argv['annot_fname'], 'r') as f:
+    with open(argv['annot_path'] + 'train.txt', 'r') as f:
         lines = f.readlines()
+    with open(argv['annot_path'] + 'valid.txt', 'r') as f:
+        lines += f.readlines()
 
     # run k_mean to find the anchors
     annotation_dims = []
     for l in lines:
         lspl = l.split()
         for o in lspl[1:]:
-            ospl = [int(n) for n in o.split(',')]
+            ospl = [int(n) for n in o.split(',')[:4]]
             xmin, ymin, xmax, ymax = ospl[:4]
             relative_w = (float(xmax) - float(xmin))/argv['img_size']
             relative_h = (float(ymax) - float(ymin))/argv['img_size']
@@ -127,9 +129,11 @@ def _main_(argv):
 if __name__ == '__main__':
 
     args = {
-        'annot_fname':'/home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/test/train.txt',
+        'annot_path':'/home/users/ilic/ML/ML_clusters_project/YOLOV3/runs/2048x0p396_ds1_mb1_nopad_nocl/',
         'n_anchors':9,
         'img_size':2048,
-        'input_size':512,
+        'input_size':2048,
     }
+    print("Args:")
+    print(args)
     _main_(args)
