@@ -100,7 +100,7 @@ def image_preprocess(image, target_size, gt_boxes=None):
         return image_paded, gt_boxes
 
 
-def draw_bbox(image, bboxes, classes=read_class_names(cfg.YOLO.NAMES), show_label=True):
+def draw_bbox(image, bboxes, classes=read_class_names(cfg.YOLO.NAMES), show_label=True,fontScale=0.5):
     """
     bboxes: [x_min, y_min, x_max, y_max, probability, cls_id] format coordinates.
     """
@@ -117,7 +117,6 @@ def draw_bbox(image, bboxes, classes=read_class_names(cfg.YOLO.NAMES), show_labe
 
     for i, bbox in enumerate(bboxes):
         coor = np.array(bbox[:4], dtype=np.int32)
-        fontScale = 0.5
         score = bbox[4]
         class_ind = int(bbox[5])
         bbox_color = colors[class_ind]
@@ -210,14 +209,15 @@ def nms(bboxes, iou_threshold, sigma=0.3, method='nms'):
     return best_bboxes
 
 
-def postprocess_boxes(pred_bbox, org_img_shape, input_size, score_threshold):
+def postprocess_boxes(pred_bbox, org_img_shape, input_size, score_threshold, clip=True, no_class=False):
 
     valid_scale=[0, np.inf]
     pred_bbox = np.array(pred_bbox)
 
     pred_xywh = pred_bbox[:, 0:4]
     pred_conf = pred_bbox[:, 4]
-    pred_prob = pred_bbox[:, 5:]
+    if not no_class:
+        pred_prob = pred_bbox[:, 5:]
 
     # # (1) (x, y, w, h) --> (xmin, ymin, xmax, ymax)
     pred_coor = np.concatenate([pred_xywh[:, :2] - pred_xywh[:, 2:] * 0.5,
@@ -233,8 +233,9 @@ def postprocess_boxes(pred_bbox, org_img_shape, input_size, score_threshold):
     pred_coor[:, 1::2] = 1.0 * (pred_coor[:, 1::2] - dh) / resize_ratio
 
     # # (3) clip some boxes those are out of range
-    pred_coor = np.concatenate([np.maximum(pred_coor[:, :2], [0, 0]),
-                                np.minimum(pred_coor[:, 2:], [org_w - 1, org_h - 1])], axis=-1)
+    if clip:
+        pred_coor = np.concatenate([np.maximum(pred_coor[:, :2], [0, 0]),
+                                    np.minimum(pred_coor[:, 2:], [org_w - 1, org_h - 1])], axis=-1)
     invalid_mask = np.logical_or((pred_coor[:, 0] > pred_coor[:, 2]), (pred_coor[:, 1] > pred_coor[:, 3]))
     pred_coor[invalid_mask] = 0
 
@@ -243,14 +244,14 @@ def postprocess_boxes(pred_bbox, org_img_shape, input_size, score_threshold):
     scale_mask = np.logical_and((valid_scale[0] < bboxes_scale), (bboxes_scale < valid_scale[1]))
 
     # # (5) discard some boxes with low scores
-    classes = np.argmax(pred_prob, axis=-1)
-    scores = pred_conf * pred_prob[np.arange(len(pred_coor)), classes]
+    if not no_class:
+        classes = np.argmax(pred_prob, axis=-1)
+        scores = pred_conf * pred_prob[np.arange(len(pred_coor)), classes]
+    else:
+        classes = pred_conf * 0
+        scores = pred_conf
     score_mask = scores > score_threshold
     mask = np.logical_and(scale_mask, score_mask)
     coors, scores, classes = pred_coor[mask], scores[mask], classes[mask]
 
     return np.concatenate([coors, scores[:, np.newaxis], classes[:, np.newaxis]], axis=-1)
-
-
-
-
