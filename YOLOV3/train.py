@@ -5,16 +5,17 @@ import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
 from core.config import cfg
-
-
 if cfg.YOLO.MODE == "class":
     from core.dataset import Dataset
     from core.yolov3 import YOLOv3, decode, compute_loss
-elif cfg.YOLO.MODE == "reg":
-    from core.alt_dataset import Dataset
-    from core.alt_yolov3 import YOLOv3, decode, compute_loss
+elif cfg.YOLO.MODE == "no_class":
+    from core.nocl_dataset import Dataset
+    from core.nocl_yolov3 import YOLOv3, decode, compute_loss
+elif cfg.YOLO.MODE == "regression":
+    from core.reg_dataset import Dataset
+    from core.reg_yolov3 import YOLOv3, decode, compute_loss
 else:
-    raise ValueError("Wrong mode specified: %s (must be either class or reg)" % cfg.YOLO.MODE)
+    raise ValueError("Wrong mode specified: %s (must be either class, no_class, or regression)" % cfg.YOLO.MODE)
 
 # Read training and validation sets
 trainset = Dataset('train')
@@ -82,23 +83,24 @@ def train_step(image_data, target):
         with tf.GradientTape() as tape:
             # Predict result
             pred_result = model(image_data, training=True)
-            giou_loss = conf_loss = prob_loss = 0
+            giou_loss = conf_loss = porr_loss = 0
             # Compute losses
             for i in range(3):
                 conv, pred = pred_result[i*2], pred_result[i*2+1]
                 loss_items = compute_loss(pred, conv, *target[i], i)
                 giou_loss += loss_items[0]
                 conf_loss += loss_items[1]
-                prob_loss += loss_items[2]
-            total_loss = giou_loss + conf_loss + prob_loss
+                if cfg.YOLO.MODE != "no_class":
+                    porr_loss += loss_items[2]
+            total_loss = giou_loss + conf_loss + porr_loss
             # Compute gradient
             gradients = tape.gradient(total_loss, model.trainable_variables)
             optimizer.apply_gradients(zip(gradients, model.trainable_variables))
     else:
-        grads = []
+        # grads = []
         for ix in range(cfg.TRAIN.BATCH_SIZE):
             with tf.GradientTape() as tape:
-                giou_loss = conf_loss = prob_loss = 0
+                giou_loss = conf_loss = porr_loss = 0
                 print(ix)
                 # Predict result
                 pred_result = model(
@@ -113,20 +115,21 @@ def train_step(image_data, target):
                     loss_items = compute_loss(pred, conv, *tgt, i)
                     giou_loss += loss_items[0] / cfg.TRAIN.BATCH_SIZE
                     conf_loss += loss_items[1] / cfg.TRAIN.BATCH_SIZE
-                    prob_loss += loss_items[2] / cfg.TRAIN.BATCH_SIZE
-                total_loss = giou_loss + conf_loss + prob_loss
+                    if cfg.YOLO.MODE != "no_class":
+                        porr_loss += loss_items[2] / cfg.TRAIN.BATCH_SIZE
+                total_loss = giou_loss + conf_loss + porr_loss
                 # Compute gradient (individuals, then sum all)
-                grads.append(tape.gradient(total_loss, model.trainable_variables))
+                # grads.append(tape.gradient(total_loss, model.trainable_variables))
                 # Alternative gradient computing (cumulative sum during the loop)
-                # if ix == 0:
-                #     gradients = tape.gradient(total_loss, model.trainable_variables)
-                # else:
-                #     tmp_grad = tape.gradient(total_loss, model.trainable_variables)
-                #     gradients = [
-                #         tf.add(gradients[i], tmp_grad[i]) for i in range(len(gradients))
-                #     ]
+                if ix == 0:
+                    gradients = tape.gradient(total_loss, model.trainable_variables)
+                else:
+                    tmp_grad = tape.gradient(total_loss, model.trainable_variables)
+                    gradients = [
+                        tf.add(gradients[i], tmp_grad[i]) for i in range(len(gradients))
+                    ]
         # Sum gradients
-        gradients = [tf.add_n([g[i] for g in grads]) for i in range(len(grads[0]))]
+        # gradients = [tf.add_n([g[i] for g in grads]) for i in range(len(grads[0]))]
 
     # Apply gradient
     optimizer.apply_gradients(zip(gradients, model.trainable_variables))
@@ -138,14 +141,14 @@ def train_step(image_data, target):
         tf.print("   * learning rate = %e" % optimizer.lr.numpy())
         tf.print("   * giou_loss = %e" % giou_loss)
         tf.print("   * conf_loss = %e" % conf_loss)
-        tf.print("   * prob_loss = %e" % prob_loss)
+        tf.print("   * porr_loss = %e" % porr_loss)
         tf.print("   * total_loss = %e" % total_loss)
     tf.print(
         "%d  %e  %e  %e  %e  %e" % (
             global_steps,
             optimizer.lr.numpy(),
             giou_loss, conf_loss,
-            prob_loss, total_loss,
+            porr_loss, total_loss,
         ),
         output_stream='file://' + os.getcwd() + f'/runs/{cfg.YOLO.ROOT}/log_train.txt',
     )
@@ -169,7 +172,7 @@ def train_step(image_data, target):
             tf.summary.scalar("loss/total_loss", total_loss, step=global_steps)
             tf.summary.scalar("loss/giou_loss", giou_loss, step=global_steps)
             tf.summary.scalar("loss/conf_loss", conf_loss, step=global_steps)
-            tf.summary.scalar("loss/prob_loss", prob_loss, step=global_steps)
+            tf.summary.scalar("loss/porr_loss", porr_loss, step=global_steps)
         writer.flush()
 
 # Create TF log directory for validation
@@ -183,7 +186,7 @@ def validate_step(image_data, target):
 
     # Predict result
     pred_result = model(image_data, training=False)
-    giou_loss = conf_loss = prob_loss = 0
+    giou_loss = conf_loss = porr_loss = 0
 
     # Compute losses
     for i in range(3):
@@ -191,8 +194,9 @@ def validate_step(image_data, target):
         loss_items = compute_loss(pred, conv, *target[i], i)
         giou_loss += loss_items[0]
         conf_loss += loss_items[1]
-        prob_loss += loss_items[2]
-    total_loss = giou_loss + conf_loss + prob_loss
+        if cfg.YOLO.MODE != "no_class":
+            porr_loss += loss_items[2]
+    total_loss = giou_loss + conf_loss + porr_loss
 
     # Print validation results in a log file
     tf.print(
@@ -200,7 +204,7 @@ def validate_step(image_data, target):
             global_steps,
             optimizer.lr.numpy(),
             giou_loss, conf_loss,
-            prob_loss, total_loss,
+            porr_loss, total_loss,
         ),
         output_stream='file://' + os.getcwd() + f'/runs/{cfg.YOLO.ROOT}/log_valid.txt',
     )
@@ -212,7 +216,7 @@ def validate_step(image_data, target):
             tf.summary.scalar("validate_loss/total_loss", total_loss, step=global_steps)
             tf.summary.scalar("validate_loss/giou_loss", giou_loss, step=global_steps)
             tf.summary.scalar("validate_loss/conf_loss", conf_loss, step=global_steps)
-            tf.summary.scalar("validate_loss/prob_loss", prob_loss, step=global_steps)
+            tf.summary.scalar("validate_loss/porr_loss", porr_loss, step=global_steps)
         validate_writer.flush()
 
     return total_loss
