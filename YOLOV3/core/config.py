@@ -13,10 +13,13 @@ __C.YOLO                      = edict()
 
 ### Choose size of the YOLO network (first layer)
 __C.YOLO.SIZE = 512
+# __C.YOLO.SIZE = 1024
+# __C.YOLO.SIZE = 2048
 
 ### Choose the working mode of YOLO (classification or regression)
 # __C.YOLO.MODE = "class"
-__C.YOLO.MODE = "reg"
+__C.YOLO.MODE = "no_class"
+# __C.YOLO.MODE = "regression"
 
 ### Choose name of output folder (code will create it in "./runs")
 # __C.YOLO.ROOT = "2048x2048_ds2_0p396_pad50"
@@ -28,11 +31,17 @@ __C.YOLO.MODE = "reg"
 # __C.YOLO.ROOT = "2048x0p396_ds1_mb32_nopad_A"
 # __C.YOLO.ROOT = "2048x0p396_ds1_mb32_nopad_B"
 # __C.YOLO.ROOT = "2048x0p792_ds1_mb32_nopad_A"
-__C.YOLO.ROOT = "2048x0p396_ds4_mb8_nopad_reg_z"
+# __C.YOLO.ROOT = "2048x0p396_ds4_mb8_nopad_reg_z"
+# __C.YOLO.ROOT = "2048x0p396_ds4_mb8_nopad_reg_z_v2"
+__C.YOLO.ROOT = "2048x0p396_ds4_mb8_nopad_nocl"
+# __C.YOLO.ROOT = "2048x0p396_ds2_mb2_nopad_nocl"
+# __C.YOLO.ROOT = "2048x0p396_ds1_mb1_nopad_nocl"
+# __C.YOLO.ROOT = "2048x0p396_ds4_mb128obo_nopad_nocl"
+# __C.YOLO.ROOT = "2048x0p396_ds2_mb128obo_nopad_nocl"
 
 ### File containing the YOLO classes or regression variable names
-__C.YOLO.NAMES              = "./runs/regvars.names"
-# __C.YOLO.NAMES              = "./runs/clusters.names"
+# __C.YOLO.NAMES              = "./runs/regvars.names"
+__C.YOLO.NAMES              = "./runs/clusters.names"
 # __C.YOLO.NAMES              = "./runs/clusters_zbins.names"
 # __C.YOLO.NAMES              = "./runs/clusters_zbins_ovl.names"
 
@@ -42,10 +51,11 @@ __C.YOLO.NAMES              = "./runs/regvars.names"
 ### predicting a bounding box, YOLOv2 (and v3) predict off-sets from a predetermined
 ### set of boxes with particular height-width ratios - those predetermined set of
 ### boxes are the anchor boxes.
-__C.YOLO.ANCHORS              = "./runs/baseline_anchors.txt"
+# __C.YOLO.ANCHORS              = "./runs/baseline_anchors.txt"
 # __C.YOLO.ANCHORS              = "./runs/clusters_anchors_2048_A.txt"
 # __C.YOLO.ANCHORS              = "./runs/clusters_anchors_1024.txt"
 # __C.YOLO.ANCHORS              = "./runs/clusters_anchors_512.txt"
+__C.YOLO.ANCHORS          = "./runs/%s/anchors.txt" % __C.YOLO.ROOT
 
 ### List of strides == integer factors by which the input images are reduced
 ### within the YOLO network when performing the multiscale detection
@@ -86,35 +96,37 @@ __C.TRAIN.ANNOT_PATH          = "./runs/%s/train.txt" % __C.YOLO.ROOT
 # __C.TRAIN.ANNOT_PATH          = "./runs/%s/train_crop.txt" % __C.YOLO.ROOT
 
 ### Optional path to weights file to initialize the network with
-# __C.TRAIN.WEIGHTS_FNAME        = None
-__C.TRAIN.WEIGHTS_FNAME        = "./path/to/weights"
+__C.TRAIN.WEIGHTS_FNAME        = None
+# __C.TRAIN.WEIGHTS_FNAME        = "./runs/2048x0p396_ds4_mb8_nopad_reg_z/yolov3_epoch2"
 
 # Number of training epochs
 __C.TRAIN.EPOCHS              = 100
 
 ### How many training images per batch (careful, can saturate GPU memory quickly)
+__C.TRAIN.BATCH_SIZE          = 128
 # __C.TRAIN.BATCH_SIZE          = 32
 # __C.TRAIN.BATCH_SIZE          = 16
-__C.TRAIN.BATCH_SIZE          = 8
-# __C.TRAIN.BATCH_SIZE          = 4
+# __C.TRAIN.BATCH_SIZE          = 8
 # __C.TRAIN.BATCH_SIZE          = 2
 # __C.TRAIN.BATCH_SIZE          = 1
 
 ### Alternative method of mini-batch to accomodate large images
-# __C.TRAIN.BATCH_ONE_BY_ONE    = True
-__C.TRAIN.BATCH_ONE_BY_ONE    = False
+__C.TRAIN.BATCH_ONE_BY_ONE    = True
+# __C.TRAIN.BATCH_ONE_BY_ONE    = False
 
 ### List of image sizes which the program randomly picks at training time, and into
 ### which the input images are converted into
 # __C.TRAIN.INPUT_SIZE          = [320, 352, 384, 416, 448, 480, 512, 544, 576, 608]
 # __C.TRAIN.INPUT_SIZE          = [512]
-__C.TRAIN.INPUT_SIZE          = [512]
 # __C.TRAIN.INPUT_SIZE          = [2048]
+__C.TRAIN.INPUT_SIZE          = [__C.YOLO.SIZE]
 
 ### Choose whether to perform data augmentation (namely, horizontal flip, crop, and
 ### translation) on training images
 __C.TRAIN.DATA_AUG            = True
 # __C.TRAIN.DATA_AUG            = False
+__C.TRAIN.AUG_FREQ            = 0.5
+__C.TRAIN.AUG_TYPES           = ['h_flip', 'v_flip', 'transpose']
 
 ### Initial and final learning rate, and number of "warmup epochs"
 ### During the warmup, the learning rate "lr" goes up as:
@@ -124,12 +136,13 @@ __C.TRAIN.DATA_AUG            = True
 ####      [1 + cos(pi * (X - WARMUP_EPOCHS)/(EPOCHS - WARMUP_EPOCHS))]
 #### where X = current_step / steps_per_epoch
 ###
-# __C.TRAIN.LR_INIT             = 1e-3
-__C.TRAIN.LR_INIT             = 1e-4  # intial learning rate
+# __C.TRAIN.LR_INIT             = 1e-4  # intial learning rate
+__C.TRAIN.LR_INIT             = 1e-5
 __C.TRAIN.LR_END              = 1e-6 # final learning rate
-# __C.TRAIN.WARMUP_EPOCHS       = 2
-__C.TRAIN.WARMUP_EPOCHS       = 4
+__C.TRAIN.WARMUP_EPOCHS       = 2
+# __C.TRAIN.WARMUP_EPOCHS       = 4
 # __C.TRAIN.WARMUP_EPOCHS       = 8
+# __C.TRAIN.WARMUP_EPOCHS       = 16
 
 
 ####################
@@ -139,28 +152,36 @@ __C.TRAIN.WARMUP_EPOCHS       = 4
 __C.TEST                      = edict()
 
 ### Path to weights file to use for testing
-__C.TEST.WEIGHTS_FNAME        = "./path/to/weights"
+# __C.TEST.WEIGHTS_FNAME        = "./path/to/weights"
+__C.TEST.WEIGHTS_FNAME        = "./runs/2048x0p396_ds4_mb8_nopad_nocl/yolov3_epoch99"
 
 ### "Root" name used in all output folders
-__C.TEST.OUTPUT_ROOT          = "test"
+__C.TEST.OUTPUT_ROOT          = "epoch99"
 
 ### Same definitions as for TRAIN variables, but for test images
 __C.TEST.ANNOT_PATH           = "./runs/%s/valid.txt" % __C.YOLO.ROOT
 __C.TEST.BATCH_SIZE           = 1 # always keep it like this
-# __C.TEST.INPUT_SIZE           = 512
-__C.TEST.INPUT_SIZE           = 1024
-# __C.TEST.INPUT_SIZE           = 2048
+__C.TEST.INPUT_SIZE           = __C.YOLO.SIZE
 __C.TEST.DATA_AUG             = False
+__C.TEST.AUG_FREQ             = 0.5
+__C.TEST.AUG_TYPES            = ['h_flip', 'v_flip', 'transpose']
 
 ### Additional test images settings required (for drawing, notably)
-# Image settings
-__C.TEST.IX_START = 0           # which test image to start from (0 = from beginning)
+# Original image properties
 __C.TEST.RESO = 0.396127        # arcsec/pix
-__C.TEST.PIX_SIZE = 1024        # image half side size in pixels
-__C.TEST.PAD_SIZE = 50          # padding size in pixels
+__C.TEST.PIX_SIZE = 1024        # image half-side size in pixels
+__C.TEST.PAD_SIZE = 0           # truth bboxes padding size in pixels
 
-### Discard predicted boxes whose score is below this threshold
+### Choose whether or not to create copies of the input images with
+### truth and inferred bboxes drawn on them
+__C.TEST.OUTPUT_IMG = False
+__C.TEST.DRAW_GALS = False # whether or not to draw circles around member galaxies
+
+### Discard predicted bboxes whose score is below this threshold
 __C.TEST.SCORE_THRESHOLD      = 0.3
+
+### Clip the predicted bboxes (if they extend outside the original image)
+__C.TEST.CLIP_BBOX = False
 
 ### Which method for "pruning" detected boxes
 ### (see nms function in core/utils.py)
