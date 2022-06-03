@@ -388,4 +388,81 @@ http://skyserver.sdss.org/dr8/en/tools/search/x_sql.asp?format=html&cmd=SELECT%2
 http://skyserver.sdss.org/dr8/en/tools/search/x_sql.asp?format=html&cmd=SELECT%20TOP%20500%20p.objid,cast(str(p.ra,13,8)%20as%20float)%20as%20ra,p.dec,p.dered_u,p.dered_g,p.dered_r,p.dered_i,p.dered_z,p.err_u,p.err_g,p.err_r,p.err_i,p.err_z,p.type,p.flags%20FROM%20..PhotoObj%20AS%20p%20JOIN%20dbo.fGetObjFromRect(38.8185369331657,39.0273778257017,-5.52310328628162,-5.29267509982209)%20AS%20b%20ON%20p.objID%20=%20b.objID%20WHERE (b.flags AND (dbo.fPhotoFlags('SATURATED'))) != 0 WHERE
 
 
-http://skyserver.sdss.org/dr8/en/tools/search/x_sql.asp?format=html&cmd=SELECT%20TOP%20500%20p.objid,cast(str(p.ra,13,8)%20as%20float)%20as%20ra,p.dec,p.dered_u,p.dered_g,p.dered_r,p.dered_i,p.dered_z,p.err_u,p.err_g,p.err_r,p.err_i,p.err_z,p.type,p.flags,dbo.fPhotoFlagsN(flags)%20FROM%20..PhotoObj%20AS%20p%20JOIN%20dbo.fGetObjFromRect(38.8185369331657,39.0273778257017,-5.52310328628162,-5.29267509982209)%20AS%20b%20ON%20p.objID%20=%20b.objID%20WHERE%20((p.type%20=%203))
+http://skyserver.sdss.org/dr8/en/tools/search/x_rect.asp?min_ra=180.1&max_ra=180.2&min_dec=-0.1&max_dec=0.01&format=xml&topnum=20
+
+## BEST ONE BELOW ?
+import csv, urllib.request
+
+ra_min = 38.8185369331657
+ra_max = 39.0273778257017
+dec_min = -5.52310328628162
+dec_max = -5.29267509982209
+url = f"http://skyserver.sdss.org/dr8/en/tools/search/x_sql.asp?format=csv&cmd=SELECT%20TOP%20500%20p.objid,cast(str(p.ra,13,8)%20as%20float)%20as%20ra,p.dec,p.dered_u,p.dered_g,p.dered_r,p.dered_i,p.dered_z,p.err_u,p.err_g,p.err_r,p.err_i,p.err_z,p.type,p.flags,dbo.fPhotoFlagsN(flags)%20FROM%20..PhotoObj%20AS%20p%20JOIN%20dbo.fGetObjFromRect({ra_min},{ra_max},{dec_min},{dec_max})%20AS%20b%20ON%20p.objID%20=%20b.objID%20WHERE%20((p.type%20=%203))"
+response = urllib.request.urlopen(url)
+lines = [l.decode('utf-8') for l in response.readlines()]
+cr = csv.reader(lines)
+tab = []
+for row in cr:
+    # r = row
+    # print(row)
+    tab.append(row)
+
+###########################################################################################################
+
+import os, sys, gc
+import numpy as np
+from tqdm import tqdm
+from astropy.io import fits
+import csv, urllib.request
+from multiprocessing import Pool
+
+
+# Path to fits files
+pathData="/home/users/ilic/ML/SDSS_fits_data/"
+
+# Read data in fits files
+hdul1 = fits.open(pathData+'redmapper_dr8_public_v6.3_catalog.fits')
+hdul2 = fits.open(pathData+'redmapper_dr8_public_v6.3_members.fits')
+clu_full_data = hdul1[1].data
+mem_full_data = hdul2[1].data
+n_clu = len(clu_full_data)
+IDs, ixs, cts = np.unique(mem_full_data['ID'], return_index=True, return_counts=True)
+
+# for ix, ct in tqdm(zip(ixs, cts)):
+def get_bad(p):
+    ix, ct = p
+    ras = mem_full_data['RA'][ix:ix+ct]
+    decs = mem_full_data['DEC'][ix:ix+ct]
+    d_ra = ras.max() - ras.min()
+    d_dec = decs.max() - decs.min()
+    ra_min = ras.min() - 0.1 * d_ra
+    ra_max = ras.max() + 0.1 * d_ra
+    dec_min = decs.min() - 0.1 * d_dec
+    dec_max = decs.max() + 0.1 * d_dec
+    url = f"http://skyserver.sdss.org/dr8/en/tools/search/x_sql.asp?format=csv&cmd=SELECT%20TOP%205000%20p.objid,cast(str(p.ra,13,8)%20as%20float)%20as%20ra,p.dec,p.dered_u,p.dered_g,p.dered_r,p.dered_i,p.dered_z,p.err_u,p.err_g,p.err_r,p.err_i,p.err_z,p.type,p.flags,dbo.fPhotoFlagsN(flags)%20FROM%20..PhotoObj%20AS%20p%20JOIN%20dbo.fGetObjFromRect({ra_min},{ra_max},{dec_min},{dec_max})%20AS%20b%20ON%20p.objID%20=%20b.objID%20WHERE%20((p.type%20=%203))"
+    response = urllib.request.urlopen(url)
+    lines = [l.decode('utf-8') for l in response.readlines()]
+    cr = csv.reader(lines)
+    tab = []
+    for row in cr:
+        tab.append(row)
+    all_objid = [int(t[0]) for t in tab[1:]]
+    bad = 0
+    for objid in mem_full_data['OBJID'][ix:ix+ct]:
+        if objid not in all_objid:
+            bad += 1
+    if bad > 0:
+        print("Cluster %s has %s missing galaxies" % (mem_full_data['ID'][ix], bad))
+    return [bad, len(all_objid)]
+
+if __name__ == '__main__':
+    pool = Pool(32)
+    res = list(
+        tqdm(
+            pool.imap(get_bad, zip(ixs, cts)),
+            total=n_clu,
+            smoothing=0.,
+        )
+    )
+    pool.close()
+    pool.join()
