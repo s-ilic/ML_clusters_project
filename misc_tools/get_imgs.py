@@ -11,6 +11,8 @@ from healpy.projector import GnomonicProj as GP
 
 
 #################################################################################
+#################################################################################
+
 
 # Path to fits files
 pathData="/home/users/ilic/ML/SDSS_fits_data/"
@@ -37,6 +39,7 @@ c2 = SkyCoord(
 )
 
 # Special cases:
+'''
 spe = [11, 69, 73, 165, 313, 4540]
 for s in spe:
     print("Before: RA=%s, DEC=%s" % (clu_full_data['RA'][s], clu_full_data['DEC'][s]))
@@ -47,7 +50,10 @@ for s in spe:
     clu_full_data['RA'][s] += delta_ra
     clu_full_data['DEC'][s] += delta_dec
     print("After: RA=%s, DEC=%s" % (clu_full_data['RA'][s], clu_full_data['DEC'][s]))
+'''
 
+
+#################################################################################
 #################################################################################
 
 
@@ -69,6 +75,7 @@ for i in tqdm(range(n_clu)):
         os.system('wget -q "%s" -O %s' % (com, path))
 '''
 
+
 # # # # # # # # # # #
 # Get images:
 # - source : SDSS DR16 ImgCutout service
@@ -86,6 +93,7 @@ for i in tqdm(range(n_clu)):
         os.system('wget -q "%s" -O %s' % (com, path))
 '''
 
+
 # # # # # # # # # # #
 # Get images:
 # - source : SDSS DR16 ImgCutout service
@@ -102,6 +110,7 @@ for i in tqdm(range(n_clu)):
     else:
         os.system('wget -q "%s" -O %s' % (com, path))
 '''
+
 
 # # # # # # # # # # #
 # Get images:
@@ -146,6 +155,7 @@ while ct < 1000:
             os.system('rm %s' % path)
 '''
 
+
 # # # # # # # # # # #
 # Get images:
 # - source : SDSS DR16 ImgCutout service
@@ -176,9 +186,6 @@ while ct < 1000:
                 os.system('rm %s' % path)
 '''
 
-#################################################################################
-#################################################################################
-
 
 # # # # # # # # # # #
 # Get images:
@@ -201,6 +208,7 @@ for i in tqdm(range(n_clu)):
     else:
         os.system('wget -q "%s" -O %s' % (com, path))
 '''
+
 
 # # # # # # # # # # #
 # Get images:
