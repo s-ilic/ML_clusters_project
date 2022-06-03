@@ -1025,8 +1025,8 @@ import matplotlib
 # path = "2048x2048_ds4_0p396_pad50_zbins_ovl"
 # path = "2048x0p396_ds1_mb32_nopad_A"
 # path = "2048x0p396_ds4_mb8_nopad_reg_z"
-# path = "2048x0p396_ds4_mb8_nopad_nocl"
-path = "2048x0p396_ds2_mb2_nopad_nocl"
+path = "2048x0p396_ds4_mb8_nopad_nocl"
+# path = "2048x0p396_ds2_mb2_nopad_nocl"
 # path = "test2"
 t1 = np.loadtxt("runs/" + path + '/log_train.txt')
 t2 = np.loadtxt("runs/" + path + '/log_valid.txt')
@@ -1034,7 +1034,7 @@ t2 = np.loadtxt("runs/" + path + '/log_valid.txt')
 #plt.plot(t1[:, 0], t1[:, 5], label='training sample')
 #plt.plot(t2[:, 0], t2[:, 5], '+', label='validation sample')
 uniqs, invixs = np.unique(t2[:, 0], return_inverse=True)
-x, y1, y2, y2m = [], [], [], []
+x, y1, y2, y2m, y2med = [], [], [], [], []
 y2errls, y2errus = [], []
 for i, u in enumerate(uniqs[:-1]):
     y2errl, y2erru = [], []
@@ -1045,6 +1045,8 @@ for i, u in enumerate(uniqs[:-1]):
     x.append(i+1)
     g = (t2[:, 0] == u) & (np.isfinite(t2[:, 5]))
     y2m.append(t2[:, 5][g].mean())
+    y2med.append(np.median(t2[:, 5][g]))
+    
     # y2errl.append(y2[-1]-np.percentile(t2[:, 5][g], 16))
     # y2erru.append(np.percentile(t2[:, 5][g], 84)-y2[-1])
     # y2errl2.append(y2[-1]-np.percentile(t2[:, 5][g], 2.5))
@@ -1078,7 +1080,8 @@ plt.savefig("runs/" + path + '/loss_alt.pdf')
 
 plt.clf()
 plt.plot(x, y1, label='Training')
-plt.plot(x, y2m, label='Validation', color='red')
+#plt.plot(x, y2m, label='Validation', color='red')
+plt.plot(x, y2med, label='Validation', color='red')
 g = np.isfinite(t2[:, 5])
 plt.hist2d(
     invixs[g],
@@ -1089,7 +1092,7 @@ plt.hist2d(
     ],
     cmap=plt.cm.Oranges,
     vmax=1300,
-    # norm=matplotlib.colors.LogNorm(),
+    #norm=matplotlib.colors.LogNorm(),
 )
 plt.yscale('log')
 plt.xlabel("Epoch")
