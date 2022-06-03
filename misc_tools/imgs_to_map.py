@@ -10,13 +10,57 @@ from astropy import units as u
 from astropy.coordinates import SkyCoord
 from healpy.projector import GnomonicProj as GP
 
-# fits files
+# Path to fits files
 pathData="/home/users/ilic/ML/SDSS_fits_data/"
+
+# Read data in fits files
 hdul1 = fits.open(pathData+'redmapper_dr8_public_v6.3_catalog.fits')
 hdul2 = fits.open(pathData+'redmapper_dr8_public_v6.3_members.fits')
 clu_full_data = hdul1[1].data
 mem_full_data = hdul2[1].data
 n_clu = len(clu_full_data)
+
+# All clusters sky coordinates
+c = SkyCoord(
+    ra=clu_full_data['RA']*u.degree,
+    dec=clu_full_data['DEC']*u.degree,
+    frame='icrs',
+)
+
+# All member galaxies coordinates
+c2 = SkyCoord(
+    ra=mem_full_data['RA']*u.degree,
+    dec=mem_full_data['DEC']*u.degree,
+    frame='icrs',
+)
+
+
+# Make a map of all clusters as minimal boxes that contains all their member galaxies
+def get_box_verts(i):
+
+    # Member galaxies
+    g = np.where(mem_full_data['ID'] == clu_full_data['ID'][i])[0]
+
+    # Spherical offsets of those galaxies around current cluster
+    offs = c[i].spherical_offsets_to(c2[g])
+
+    # Box coordinates
+    x1 = (c[i].ra + min(offs[0])).degree
+    x2 = (c[i].ra + max(offs[0])).degree
+    y1 = (c[i].dec + min(offs[1])).degree
+    y2 = (c[i].dec + max(offs[1])).degree
+
+    return hp.ang2vec([x1, x2, x2, x1], [y1, y1, y2, y2], lonlat=True)
+
+nside = 2048
+m = np.zeros(hp.nside2npix(nside))
+for i in tqdm(range(len(clu_full_data))):
+    v = get_box_verts(i)
+    ixs = hp.query_polygon(nside, v)
+    m[ixs] += 1
+hp.mollview(m, xsize=2048)
+plt.savefig('clus_box_map.png', dpi=600)
+
 
 '''
 empty_path = "/home/users/ilic/ML/SDSS_image_data/empty_2048x2048_0p396127"
