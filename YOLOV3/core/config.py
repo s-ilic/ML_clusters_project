@@ -12,8 +12,8 @@ cfg                           = __C
 __C.YOLO                      = edict()
 
 ### Choose size of the YOLO network (first layer)
-__C.YOLO.SIZE = 512
-# __C.YOLO.SIZE = 1024
+#__C.YOLO.SIZE = 512
+__C.YOLO.SIZE = 1024
 # __C.YOLO.SIZE = 2048
 
 ### Choose the working mode of YOLO (classification or regression)
@@ -33,7 +33,7 @@ __C.YOLO.MODE = "no_class"
 # __C.YOLO.ROOT = "2048x0p792_ds1_mb32_nopad_A"
 # __C.YOLO.ROOT = "2048x0p396_ds4_mb8_nopad_reg_z"
 # __C.YOLO.ROOT = "2048x0p396_ds4_mb8_nopad_reg_z_v2"
-__C.YOLO.ROOT = "2048x0p396_ds4_mb8_nopad_nocl"
+__C.YOLO.ROOT = "test_run_1_1024_nofield" #"2048x0p396_ds4_mb8_nopad_nocl"
 # __C.YOLO.ROOT = "2048x0p396_ds2_mb2_nopad_nocl"
 # __C.YOLO.ROOT = "2048x0p396_ds1_mb1_nopad_nocl"
 # __C.YOLO.ROOT = "2048x0p396_ds4_mb128obo_nopad_nocl"
@@ -55,7 +55,7 @@ __C.YOLO.NAMES              = "./runs/clusters.names"
 # __C.YOLO.ANCHORS              = "./runs/clusters_anchors_2048_A.txt"
 # __C.YOLO.ANCHORS              = "./runs/clusters_anchors_1024.txt"
 # __C.YOLO.ANCHORS              = "./runs/clusters_anchors_512.txt"
-__C.YOLO.ANCHORS          = "./runs/%s/anchors.txt" % __C.YOLO.ROOT
+__C.YOLO.ANCHORS          = "./runs/baseline_anchors.txt" #"./runs/%s/anchors.txt" % __C.YOLO.ROOT
 
 ### List of strides == integer factors by which the input images are reduced
 ### within the YOLO network when performing the multiscale detection
@@ -92,7 +92,7 @@ __C.TRAIN.DO_TBOARD           = False
 ### Path to text file "pointing" to the training set of images; each line of the file
 ### should contain the full path to an image, followed by the list of bounding boxes
 ### (+ class number) for all objects in said image
-__C.TRAIN.ANNOT_PATH          = "./runs/%s/train.txt" % __C.YOLO.ROOT
+__C.TRAIN.ANNOT_PATH          = "./runs/%s/train_kg.txt" % __C.YOLO.ROOT
 # __C.TRAIN.ANNOT_PATH          = "./runs/%s/train_crop.txt" % __C.YOLO.ROOT
 
 ### Optional path to weights file to initialize the network with
@@ -137,9 +137,9 @@ __C.TRAIN.AUG_TYPES           = ['h_flip', 'v_flip', 'transpose']
 #### where X = current_step / steps_per_epoch
 ###
 # __C.TRAIN.LR_INIT             = 1e-4  # intial learning rate
-__C.TRAIN.LR_INIT             = 1e-5
-__C.TRAIN.LR_END              = 1e-6 # final learning rate
-__C.TRAIN.WARMUP_EPOCHS       = 2
+__C.TRAIN.LR_INIT             = 1e-7
+__C.TRAIN.LR_END              = 1e-7 # final learning rate
+__C.TRAIN.WARMUP_EPOCHS       = 4
 # __C.TRAIN.WARMUP_EPOCHS       = 4
 # __C.TRAIN.WARMUP_EPOCHS       = 8
 # __C.TRAIN.WARMUP_EPOCHS       = 16

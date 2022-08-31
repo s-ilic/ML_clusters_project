@@ -5,6 +5,7 @@ import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
 from core.config import cfg
+'''
 if cfg.YOLO.MODE == "class":
     from core.dataset import Dataset
     from core.yolov3 import YOLOv3, decode, compute_loss
@@ -16,6 +17,9 @@ elif cfg.YOLO.MODE == "regression":
     from core.reg_yolov3 import YOLOv3, decode, compute_loss
 else:
     raise ValueError("Wrong mode specified: %s (must be either class, no_class, or regression)" % cfg.YOLO.MODE)
+'''
+from core.dataset import Dataset
+from core.yolov3 import YOLOv3, decode, compute_loss
 
 # Read training and validation sets
 trainset = Dataset('train')
