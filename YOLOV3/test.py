@@ -1,8 +1,9 @@
+from genericpath import isfile
 import os, sys
 import cv2
 import shutil
-import pprint
 import numpy as np
+import h5py
 import tensorflow as tf
 import core.utils as utils
 from core.config import cfg
@@ -22,13 +23,11 @@ elif len(sys.argv) == 2:
     cmds = sys.argv[1].split(',')
     for cmd in cmds:
         exec(cmd)
-# pprint.pprint(cfg)
-# sys.exit()
 
 # Settings
 reso = cfg.TEST.RESO
 pix_size = cfg.TEST.PIX_SIZE
-pad_size = cfg.TEST.PAD_SIZE
+input_size   = cfg.YOLO.SIZE
 
 # Prep for real images/galaxies
 from astropy.io import fits
@@ -45,34 +44,21 @@ clu_full_data = hdul1[1].data
 mem_full_data = hdul2[1].data
 n_clu = len(clu_full_data)
 
-# Set up some variables
-INPUT_SIZE   = cfg.YOLO.SIZE
-NUM_CLASS    = len(utils.read_class_names(cfg.YOLO.NAMES))
-CLASSES      = utils.read_class_names(cfg.YOLO.NAMES)
-
-# Set up some paths
+# Set up some paths, filenames, folders, and files
 output_root = cfg.TEST.OUTPUT_ROOT
-mAP_dir_path = f'./runs/{cfg.YOLO.ROOT}/mAP_{output_root}'
-predicted_dir_path = f'./runs/{cfg.YOLO.ROOT}/mAP_{output_root}/predicted'
-ground_truth_dir_path = f'./runs/{cfg.YOLO.ROOT}/mAP_{output_root}/ground-truth'
+database_fname = f'./runs/{cfg.YOLO.ROOT}/database_{output_root}.hdf5'
+if os.path.isfile(database_fname):
+    raise OSError(f"Output database already exists: {database_fname}")
+f = h5py.File(database_fname, "w")
+f.close()
 detected_image_path = f'./runs/{cfg.YOLO.ROOT}/detect_{output_root}'
-
-# Clean output folders
-if os.path.exists(mAP_dir_path):
-    shutil.rmtree(mAP_dir_path)
-if os.path.exists(predicted_dir_path):
-    shutil.rmtree(predicted_dir_path)
-if os.path.exists(ground_truth_dir_path):
-    shutil.rmtree(ground_truth_dir_path)
-if os.path.exists(detected_image_path):
-    shutil.rmtree(detected_image_path)
-os.mkdir(mAP_dir_path)
-os.mkdir(predicted_dir_path)
-os.mkdir(ground_truth_dir_path)
-os.mkdir(detected_image_path)
+if cfg.TEST.OUTPUT_IMG:
+    if os.path.exists(detected_image_path):
+        raise OSError(f"Output folder for images already exists: {detected_image_path}")
+    os.mkdir(detected_image_path)
 
 # Build model
-input_layer  = tf.keras.layers.Input([INPUT_SIZE, INPUT_SIZE, 3])
+input_layer  = tf.keras.layers.Input([input_size, input_size, 3])
 feature_maps = YOLOv3(input_layer)
 bbox_tensors = []
 for i, fm in enumerate(feature_maps):
@@ -84,83 +70,159 @@ model.load_weights(weights_fname) #loads the weights from the training
 
 # Main loop: feed each image to the trained network and record outputs
 with open(cfg.TEST.ANNOT_PATH, 'r') as annotation_file:
+
     for num, line in enumerate(annotation_file):
+
         # Grab truth bboxes (if any)
         annotation = line.strip().split()
         image_path = annotation[0]
         image_name = image_path.split('/')[-1]
-        image = cv2.imread(image_path)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        n_bbox = len(annotation[1:])
-        if n_bbox == 0:
-            bboxes_gt=[]
-            classes_gt=[]
-        elif cfg.YOLO.MODE == "class":
-            bbox_data_gt = np.array([list(map(int, box.split(','))) for box in annotation[1:]])
-            bboxes_gt, classes_gt = bbox_data_gt[:, :4], bbox_data_gt[:, 4]
-        elif cfg.YOLO.MODE == "no_class":
-            bbox_data_gt = np.array([list(map(int, box.split(',')[:4])) for box in annotation[1:]])
-            bboxes_gt = bbox_data_gt[:, :4]
-            classes_gt = bbox_data_gt[:, -1] * 0
+        print('Image %s' % image_path)
+        num_bbox_gt = len(annotation[1:])
+        bboxes_gt = []
+        classes_gt = []
+        weights_gt = []
+        for box in annotation[1:]:
+            splbox = box.split(',')
+            if cfg.YOLO.MODE == "class":
+                bboxes_gt.append(list(map(int, splbox[:4])))
+                classes_gt.append(int(splbox[4]))
+                weights_gt.append(float(splbox[-1]))
+            elif cfg.YOLO.MODE == "no_class":
+                bboxes_gt.append(list(map(int, splbox[:4])))
+                classes_gt.append(1)
+                weights_gt.append(float(splbox[-1]))
 
-        # Print (in a file and in the terminal) the truth bboxes
-        ground_truth_path = os.path.join(ground_truth_dir_path, str(num) + '.txt')
-        print('=> ground truth of %s:' % image_name)
-        num_bbox_gt = len(bboxes_gt)
-        with open(ground_truth_path, 'w') as f:
-            for i in range(num_bbox_gt):
-                class_name = CLASSES[classes_gt[i]]
-                xmin, ymin, xmax, ymax = list(map(str, bboxes_gt[i]))
-                bbox_mess = ' '.join([class_name, xmin, ymin, xmax, ymax]) + '\n'
-                f.write(bbox_mess)
-                print('\t' + str(bbox_mess).strip())
+        # Create corresponding datasets in main database
+        f = h5py.File(database_fname, "a")
+        grp_name = image_name.split('.')[0]
+        d0 = f.create_dataset(
+            f"{grp_name}/num_bbox_gt",
+            (1,),
+            dtype='i',
+        )
+        d0[0] = num_bbox_gt
+        d1 = f.create_dataset(
+            f"{grp_name}/bboxes_gt",
+            (num_bbox_gt, 4),
+            dtype='f',
+        )
+        d1[:, :] = np.array(bboxes_gt)
+        d2 = f.create_dataset(
+            f"{grp_name}/classes_gt",
+            (num_bbox_gt,),
+            dtype='i',
+        )
+        d2[:] = np.array(classes_gt)
+        d3 = f.create_dataset(
+            f"{grp_name}/weights_gt",
+            (num_bbox_gt,),
+            dtype='f',
+        )
+        d3[:] = np.array(weights_gt)
+        f.close()
+
+        # Print the truth bboxes
+        print('  * ground truth boxes:')
+        for i in range(num_bbox_gt):
+            xmin, ymin, xmax, ymax = bboxes_gt[i]
+            cl = classes_gt[i]
+            wgt = weights_gt[i]
+            print("    - [%d, %d, %d, %d], class = %d, weight = %.3f" % (xmin, ymin, xmax, ymax, cl, wgt))
 
         # Prediction process
+        image_orig = cv2.imread(image_path) # read image
+        image = cv2.cvtColor(image_orig, cv2.COLOR_BGR2RGB) # convert col space
         image_size = image.shape[:2]
-        image_data = utils.image_preprocess(np.copy(image), [INPUT_SIZE, INPUT_SIZE])
+        image_data = utils.image_preprocess(
+            np.copy(image),
+            [input_size, input_size],
+        )
         image_data = image_data[np.newaxis, ...].astype(np.float32)
         pred_bbox = model(image_data, training=False)
         pred_bbox = [tf.reshape(x, (-1, tf.shape(x)[-1])) for x in pred_bbox]
         pred_bbox = tf.concat(pred_bbox, axis=0)
-        bboxes = utils.postprocess_boxes(
+        outputs_pr = utils.postprocess_boxes(
             pred_bbox,
             image_size,
-            INPUT_SIZE,
+            input_size,
             cfg.TEST.SCORE_THRESHOLD,
             clip=cfg.TEST.CLIP_BBOX,
-            no_class=cfg.YOLO.MODE == "no_class",
+            no_class=(cfg.YOLO.MODE == "no_class"),
         )
-        bboxes = utils.nms(
-            bboxes,
+        outputs_pr = utils.nms(
+            outputs_pr,
             cfg.TEST.IOU_THRESHOLD,
             method=cfg.TEST.IOU_METHOD,
             sigma=cfg.TEST.SIGMA,
         )
 
+        # Parse the predicted boxes
+        num_bbox_pr = len(outputs_pr)
+        bboxes_pr = []
+        scores_pr = []
+        classes_pr = []
+        for output in outputs_pr:
+            bboxes_pr.append(output[:4])
+            scores_pr.append(output[4])
+            classes_pr.append(output[5])
+
+        # Create corresponding datasets in main database
+        f = h5py.File(database_fname, "a")
+        d0 = f.create_dataset(
+            f"{grp_name}/num_bbox_pr",
+            (1,),
+            dtype='i',
+        )
+        d0[0] = num_bbox_pr
+        d1 = f.create_dataset(
+            f"{grp_name}/bboxes_pr",
+            (num_bbox_pr, 4),
+            dtype='f',
+        )
+        d1[:, :] = np.array(bboxes_pr)
+        d2 = f.create_dataset(
+            f"{grp_name}/scores_pr",
+            (num_bbox_pr,),
+            dtype='f',
+        )
+        d2[:] = np.array(scores_pr)
+        d3 = f.create_dataset(
+            f"{grp_name}/classes_pr",
+            (num_bbox_pr,),
+            dtype='i',
+        )
+        d3[:] = np.array(classes_pr)
+        f.close()
+
+        # Print the predicted bboxes
+        print('  * predicted boxes:')
+        for i in range(num_bbox_pr):
+            xmin, ymin, xmax, ymax, score, cl = outputs_pr[i]
+            print("    - [%d, %d, %d, %d], score = %.3f, class = %d" % (xmin, ymin, xmax, ymax, score, cl))
+
         # Optional: make copy of image, draw bboxes, and circle galaxies
         if cfg.TEST.OUTPUT_IMG:
+            image = image_orig.copy()
             # Draw truth bboxes
-            tmp_bboxes = []
             for bb in bboxes_gt:
-                tmp_bb = [1,1,1,1,1,1]
-                tmp_bb[:4] = bb
-                tmp_bboxes.append(tmp_bb)
-            image = utils.draw_bbox(
-                image,
-                tmp_bboxes,
-                classes=['detected','truth'],
-                fontScale=2,
-            )
+                image = utils.draw_bbox(
+                    image,
+                    [bb + [1, 1]],
+                    classes=['detected','truth'],
+                    fontScale=2,
+                )
             # Draw detected bboxes
-            image = utils.draw_bbox(
-                image,
-                bboxes,
-                classes=['detected','truth'],
-                fontScale=2,
-            )
+            for bb, sc in zip(bboxes_pr, scores_pr):
+                image = utils.draw_bbox(
+                    image,
+                    [list(bb) + [sc, 0]],
+                    classes=['detected','truth'],
+                    fontScale=2,
+                )
             # Optional: draw member galaxies
-            if cfg.TEST.DRAW_GALS and (len(tmp_bboxes) > 0):
-                clus_id = int(image_name.split('.')[0])
+            if cfg.TEST.DRAW_GALS and (num_bbox_gt > 0):
+                clus_id = int(grp_name)
                 g1 = np.where(clu_full_data['ID'] == clus_id)[0]
                 g2 = np.where(mem_full_data['ID'] == clus_id)[0]
                 c = SkyCoord(
@@ -180,19 +242,4 @@ with open(cfg.TEST.ANNOT_PATH, 'r') as annotation_file:
                     image = cv2.circle(image, (x,y), 5, (0,0,255),3)
             # Save image
             cv2.imwrite(f"{detected_image_path}/{image_name}", image)
-
-        # Print (in a file and in the terminal) the predicted bboxes
-        print('=> predict result of %s:' % image_name)
-        predict_result_path = os.path.join(predicted_dir_path, str(num) + '.txt')
-        with open(predict_result_path, 'w') as f:
-            for bbox in bboxes:
-                coor = np.array(bbox[:4], dtype=np.int32)
-                score = bbox[4]
-                class_ind = int(bbox[5])
-                class_name = CLASSES[class_ind]
-                score = '%.4f' % score
-                xmin, ymin, xmax, ymax = list(map(str, coor))
-                bbox_mess = ' '.join([class_name, score, xmin, ymin, xmax, ymax]) + '\n'
-                f.write(bbox_mess)
-                print('\t' + str(bbox_mess).strip())
 
