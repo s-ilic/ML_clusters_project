@@ -1,4 +1,3 @@
-from genericpath import isfile
 import os, sys
 import cv2
 import shutil
