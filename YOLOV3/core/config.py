@@ -12,8 +12,8 @@ cfg                           = __C
 __C.YOLO                      = edict()
 
 ### Choose size of the YOLO network (first layer)
-__C.YOLO.SIZE = 512
-# __C.YOLO.SIZE = 1024
+#__C.YOLO.SIZE = 512
+__C.YOLO.SIZE = 1024
 # __C.YOLO.SIZE = 2048
 
 ### Choose the working mode of YOLO (classification or regression)
@@ -56,7 +56,7 @@ __C.YOLO.NAMES              = "./runs/clusters.names"
 # __C.YOLO.ANCHORS              = "./runs/clusters_anchors_2048_A.txt"
 # __C.YOLO.ANCHORS              = "./runs/clusters_anchors_1024.txt"
 # __C.YOLO.ANCHORS              = "./runs/clusters_anchors_512.txt"
-__C.YOLO.ANCHORS          = "./runs/%s/anchors.txt" % __C.YOLO.ROOT
+__C.YOLO.ANCHORS          = "./runs/baseline_anchors.txt" #"./runs/%s/anchors.txt" % __C.YOLO.ROOT
 
 ### List of strides == integer factors by which the input images are reduced
 ### within the YOLO network when performing the multiscale detection
@@ -93,7 +93,7 @@ __C.TRAIN.DO_TBOARD           = False
 ### Path to text file "pointing" to the training set of images; each line of the file
 ### should contain the full path to an image, followed by the list of bounding boxes
 ### (+ class number) for all objects in said image
-__C.TRAIN.ANNOT_PATH          = "./runs/%s/train.txt" % __C.YOLO.ROOT
+__C.TRAIN.ANNOT_PATH          = "./runs/%s/train_kg.txt" % __C.YOLO.ROOT
 # __C.TRAIN.ANNOT_PATH          = "./runs/%s/train_crop.txt" % __C.YOLO.ROOT
 
 ### Optional path to weights file to initialize the network with

@@ -5,6 +5,7 @@ import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
 from core.config import cfg
+
 if cfg.YOLO.MODE == "class":
     from core.dataset import Dataset
     from core.yolov3 import YOLOv3, decode, compute_loss
@@ -16,7 +17,6 @@ elif cfg.YOLO.MODE == "regression":
     from core.reg_yolov3 import YOLOv3, decode, compute_loss
 else:
     raise ValueError("Wrong mode specified: %s (must be either class, no_class, or regression)" % cfg.YOLO.MODE)
-
 # Read training and validation sets
 trainset = Dataset('train')
 validset = Dataset('valid')
@@ -73,8 +73,9 @@ if cfg.RESUME.DO_RESUME:
 else:
     starting_lr = 1. / warmup_steps * cfg.TRAIN.LR_INIT
 
+
 # Create optimizer
-optimizer = tf.keras.optimizers.Adam(learning_rate=starting_lr)
+optimizer = tf.keras.optimizers.Adam(learning_rate=tf.Variable(starting_lr))
 
 # Main training function
 def train_step(image_data, target):
