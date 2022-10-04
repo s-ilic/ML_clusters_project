@@ -33,6 +33,7 @@ __C.YOLO.MODE = "no_class"
 # __C.YOLO.ROOT = "2048x0p792_ds1_mb32_nopad_A"
 # __C.YOLO.ROOT = "2048x0p396_ds4_mb8_nopad_reg_z"
 # __C.YOLO.ROOT = "2048x0p396_ds4_mb8_nopad_reg_z_v2"
+# __C.YOLO.ROOT = "2048x0p396_ds4_mb8_nopad_nocl_test"
 __C.YOLO.ROOT = "2048x0p396_ds4_mb8_nopad_nocl"
 # __C.YOLO.ROOT = "2048x0p396_ds2_mb2_nopad_nocl"
 # __C.YOLO.ROOT = "2048x0p396_ds1_mb1_nopad_nocl"
@@ -103,16 +104,16 @@ __C.TRAIN.WEIGHTS_FNAME        = None
 __C.TRAIN.EPOCHS              = 100
 
 ### How many training images per batch (careful, can saturate GPU memory quickly)
-__C.TRAIN.BATCH_SIZE          = 128
+# __C.TRAIN.BATCH_SIZE          = 128
 # __C.TRAIN.BATCH_SIZE          = 32
 # __C.TRAIN.BATCH_SIZE          = 16
-# __C.TRAIN.BATCH_SIZE          = 8
+__C.TRAIN.BATCH_SIZE          = 8
 # __C.TRAIN.BATCH_SIZE          = 2
 # __C.TRAIN.BATCH_SIZE          = 1
 
 ### Alternative method of mini-batch to accomodate large images
-__C.TRAIN.BATCH_ONE_BY_ONE    = True
-# __C.TRAIN.BATCH_ONE_BY_ONE    = False
+# __C.TRAIN.BATCH_ONE_BY_ONE    = True
+__C.TRAIN.BATCH_ONE_BY_ONE    = False
 
 ### List of image sizes which the program randomly picks at training time, and into
 ### which the input images are converted into
@@ -136,11 +137,11 @@ __C.TRAIN.AUG_TYPES           = ['h_flip', 'v_flip', 'transpose']
 ####      [1 + cos(pi * (X - WARMUP_EPOCHS)/(EPOCHS - WARMUP_EPOCHS))]
 #### where X = current_step / steps_per_epoch
 ###
-# __C.TRAIN.LR_INIT             = 1e-4  # intial learning rate
-__C.TRAIN.LR_INIT             = 1e-5
+__C.TRAIN.LR_INIT             = 1e-4  # intial learning rate
+# __C.TRAIN.LR_INIT             = 1e-5
 __C.TRAIN.LR_END              = 1e-6 # final learning rate
-__C.TRAIN.WARMUP_EPOCHS       = 2
-# __C.TRAIN.WARMUP_EPOCHS       = 4
+# __C.TRAIN.WARMUP_EPOCHS       = 2
+__C.TRAIN.WARMUP_EPOCHS       = 4
 # __C.TRAIN.WARMUP_EPOCHS       = 8
 # __C.TRAIN.WARMUP_EPOCHS       = 16
 
@@ -153,13 +154,13 @@ __C.TEST                      = edict()
 
 ### Path to weights file to use for testing
 # __C.TEST.WEIGHTS_FNAME        = "./path/to/weights"
-__C.TEST.WEIGHTS_FNAME        = "./runs/2048x0p396_ds4_mb8_nopad_nocl/yolov3_epoch99"
+__C.TEST.WEIGHTS_FNAME        = "./runs/%s/yolov3_epoch50" % __C.YOLO.ROOT
 
 ### "Root" name used in all output folders
-__C.TEST.OUTPUT_ROOT          = "epoch99"
+__C.TEST.OUTPUT_ROOT          = "test_valid"
 
 ### Same definitions as for TRAIN variables, but for test images
-__C.TEST.ANNOT_PATH           = "./runs/%s/valid.txt" % __C.YOLO.ROOT
+__C.TEST.ANNOT_PATH           = "./runs/%s/test_valid.txt" % __C.YOLO.ROOT
 __C.TEST.BATCH_SIZE           = 1 # always keep it like this
 __C.TEST.INPUT_SIZE           = __C.YOLO.SIZE
 __C.TEST.DATA_AUG             = False
@@ -170,12 +171,11 @@ __C.TEST.AUG_TYPES            = ['h_flip', 'v_flip', 'transpose']
 # Original image properties
 __C.TEST.RESO = 0.396127        # arcsec/pix
 __C.TEST.PIX_SIZE = 1024        # image half-side size in pixels
-__C.TEST.PAD_SIZE = 0           # truth bboxes padding size in pixels
 
 ### Choose whether or not to create copies of the input images with
 ### truth and inferred bboxes drawn on them
-__C.TEST.OUTPUT_IMG = False
-__C.TEST.DRAW_GALS = False # whether or not to draw circles around member galaxies
+__C.TEST.OUTPUT_IMG = True
+__C.TEST.DRAW_GALS = True # whether or not to draw circles around member galaxies
 
 ### Discard predicted bboxes whose score is below this threshold
 __C.TEST.SCORE_THRESHOLD      = 0.3

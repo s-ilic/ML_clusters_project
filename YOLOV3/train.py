@@ -232,7 +232,7 @@ for i in range(n_epochs):
     for image_data, target in tqdm(trainset, smoothing=1):
         train_step(image_data, target)
     # Validation
-    for image_data, target in tqdm(validset, smoothing=1):
-        valid_loss = validate_step(image_data, target)
+    #for image_data, target in tqdm(validset, smoothing=1):
+    #    valid_loss = validate_step(image_data, target)
     # Save weights
     model.save_weights(f"./runs/{cfg.YOLO.ROOT}/yolov3_epoch{n_ini_epoch+i}")
